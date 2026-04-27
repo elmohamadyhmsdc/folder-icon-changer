@@ -1,0 +1,8 @@
+PyQt6>=6.7
+requests>=2.32
+gql[requests]>=3.5
+rapidfuzz>=3.9
+Pillow>=10.4
+diskcache>=5.6
+keyring>=25
+python-dotenv>=1.0
