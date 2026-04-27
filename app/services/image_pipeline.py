@@ -97,24 +97,45 @@ def _glassmorphism_frame(img: Image.Image) -> Image.Image:
 
 def _fit_to_square(img: Image.Image, size: int) -> Image.Image:
     """
-    Scale image to fill the full square (object-fit: cover).
-    Crops only the minimum amount, with a slight upward bias so faces/titles
-    stay visible. No black bars, no tiny thumbnails.
+    Compose the poster onto a blurred, darkened backdrop so the full artwork
+    is visible — the same technique used by Netflix, Spotify, and Apple Music.
+
+    Background layer: poster scaled to fill the square (cover), heavily
+    blurred and darkened.
+    Foreground layer: poster scaled to fit within the square (contain),
+    centred with a slight upward bias so titles/faces stay prominent.
     """
     img = img.convert("RGBA")
     w, h = img.size
 
-    # Scale so the shorter dimension fills the square exactly
-    scale = max(size / w, size / h)
-    new_w = int(w * scale)
-    new_h = int(h * scale)
-    img = img.resize((new_w, new_h), Image.LANCZOS)
+    # --- Background: cover-scale → blur → darken ---
+    bg_scale = max(size / w, size / h)
+    bg_w, bg_h = int(w * bg_scale), int(h * bg_scale)
+    bg = img.resize((bg_w, bg_h), Image.LANCZOS)
+    # Centre-crop to exact square
+    bx = (bg_w - size) // 2
+    by = (bg_h - size) // 2
+    bg = bg.crop((bx, by, bx + size, by + size))
+    # Blur and darken
+    bg = bg.filter(ImageFilter.GaussianBlur(radius=18))
+    r, g, b, a = bg.split()
+    darken = 0.5
+    r = r.point(lambda x: int(x * darken))
+    g = g.point(lambda x: int(x * darken))
+    b = b.point(lambda x: int(x * darken))
+    bg = Image.merge("RGBA", (r, g, b, a))
 
-    # Crop excess: center horizontally, 35% from top vertically
-    # (upper-center bias keeps faces/logos in frame)
-    left = (new_w - size) // 2
-    top = int((new_h - size) * 0.35)
-    return img.crop((left, top, left + size, top + size))
+    # --- Foreground: contain-scale, slight upward bias ---
+    fg_scale = min(size / w, size / h)
+    fg_w, fg_h = int(w * fg_scale), int(h * fg_scale)
+    fg = img.resize((fg_w, fg_h), Image.LANCZOS)
+    # Centre horizontally; shift slightly upward (30% of vertical slack)
+    paste_x = (size - fg_w) // 2
+    slack_y = size - fg_h
+    paste_y = int(slack_y * 0.30)
+    bg.paste(fg, (paste_x, paste_y), fg)
+
+    return bg
 
 
 def _compose(img: Image.Image, style: str, score: Optional[float], radius: int) -> Image.Image:

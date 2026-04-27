@@ -104,21 +104,43 @@ class PreviewWidget(QWidget):
 
     def _on_image_loaded(self, data: bytes):
         try:
-            pil_img = Image.open(io.BytesIO(data)).convert("RGBA")
-            w, h = pil_img.size
-            side = min(w, h)
-            left = (w - side) // 2
-            top = (h - side) // 2
-            pil_img = pil_img.crop((left, top, left + side, top + side))
-            pil_img = pil_img.resize((220, 220), Image.LANCZOS)
+            from PIL import ImageFilter
+            size = 220
+            src = Image.open(io.BytesIO(data)).convert("RGBA")
+            w, h = src.size
+
+            # Background: cover-scale → heavy blur → darken
+            bg_scale = max(size / w, size / h)
+            bg_w, bg_h = int(w * bg_scale), int(h * bg_scale)
+            bg = src.resize((bg_w, bg_h), Image.LANCZOS)
+            bx = (bg_w - size) // 2
+            by = (bg_h - size) // 2
+            bg = bg.crop((bx, by, bx + size, by + size))
+            bg = bg.filter(ImageFilter.GaussianBlur(radius=18))
+            r, g, b, a = bg.split()
+            darken = 0.5
+            r = r.point(lambda x: int(x * darken))
+            g = g.point(lambda x: int(x * darken))
+            b = b.point(lambda x: int(x * darken))
+            bg = Image.merge("RGBA", (r, g, b, a))
+
+            # Foreground: contain-scale, slight upward bias
+            fg_scale = min(size / w, size / h)
+            fg_w, fg_h = int(w * fg_scale), int(h * fg_scale)
+            fg = src.resize((fg_w, fg_h), Image.LANCZOS)
+            paste_x = (size - fg_w) // 2
+            paste_y = int((size - fg_h) * 0.30)
+            bg.paste(fg, (paste_x, paste_y), fg)
+
+            pil_img = bg
 
             # Rounded corners preview
-            mask = Image.new("L", (220, 220), 0)
-            ImageDraw.Draw(mask).rounded_rectangle([(0, 0), (219, 219)], radius=14, fill=255)
+            mask = Image.new("L", (size, size), 0)
+            ImageDraw.Draw(mask).rounded_rectangle([(0, 0), (size - 1, size - 1)], radius=14, fill=255)
             pil_img.putalpha(mask)
 
             raw = pil_img.tobytes("raw", "RGBA")
-            qimg = QImage(raw, 220, 220, QImage.Format.Format_RGBA8888)
+            qimg = QImage(raw, size, size, QImage.Format.Format_RGBA8888)
             self._icon_label.setPixmap(QPixmap.fromImage(qimg))
         except Exception:
             self._show_placeholder()
