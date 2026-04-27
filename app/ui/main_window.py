@@ -440,7 +440,7 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self):
         self.setWindowTitle("Folder Icon Changer")
-        self.setMinimumSize(1000, 620)
+        self.setMinimumSize(1200, 620)
 
         central = QWidget()
         self.setCentralWidget(central)
