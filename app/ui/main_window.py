@@ -63,6 +63,7 @@ class _ApplyWorker(QThread):
             return
         with tempfile.NamedTemporaryFile(suffix=".ico", delete=False) as f:
             ico_path = f.name
+        ok = False
         try:
             ok = build_ico(
                 result.image_url,
@@ -72,6 +73,9 @@ class _ApplyWorker(QThread):
             )
             if ok:
                 ok = icon_applier.apply(self.entry.path, ico_path)
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
         finally:
             if os.path.exists(ico_path):
                 os.remove(ico_path)
@@ -92,12 +96,20 @@ _STATUS_DONE = "Applied ✓"
 _STATUS_FAILED = "Failed ✗"
 _STATUS_SKIPPED = "Skipped"
 
-_DARK_STYLE = """
+# Narrow toolbar gear button: global QPushButton uses 12px horizontal padding, which
+# crushes a glyph inside a 32px-wide button (see settings toolbar).
+_SETTINGS_TOOLBAR_BTN_QSS = "QPushButton#settingsToolbarButton { padding: 5px 6px; }\n"
+
+_DARK_STYLE = (
+    """
 QMainWindow, QWidget { background: #1a1a1a; color: #e0e0e0; }
 QTableWidget { background: #222; gridline-color: #333; color: #ddd; }
 QTableWidget::item:selected { background: #3a3a6a; }
 QHeaderView::section { background: #2a2a2a; color: #aaa; border: 1px solid #333; padding: 4px; }
 QPushButton { background: #2d2d2d; color: #ddd; border: 1px solid #444; border-radius: 4px; padding: 5px 12px; }
+"""
+    + _SETTINGS_TOOLBAR_BTN_QSS
+    + """
 QPushButton:hover { background: #3a3a3a; }
 QPushButton:disabled { color: #555; }
 QLineEdit, QComboBox, QSpinBox { background: #2a2a2a; color: #ddd; border: 1px solid #444; border-radius: 3px; padding: 3px; }
@@ -106,6 +118,7 @@ QProgressBar { background: #2a2a2a; border: 1px solid #444; border-radius: 3px; 
 QProgressBar::chunk { background: #4a6fa5; border-radius: 2px; }
 QSplitter::handle { background: #333; }
 """
+)
 
 
 class MainWindow(QMainWindow):
@@ -118,6 +131,8 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         if self._prefs.get("dark_mode", True):
             self.setStyleSheet(_DARK_STYLE)
+        else:
+            self.setStyleSheet(_SETTINGS_TOOLBAR_BTN_QSS.strip())
 
     def _setup_ui(self):
         self.setWindowTitle("Folder Icon Changer")
@@ -158,7 +173,8 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(btn_clear)
 
         btn_settings = QPushButton("⚙")
-        btn_settings.setFixedWidth(32)
+        btn_settings.setObjectName("settingsToolbarButton")
+        btn_settings.setFixedWidth(40)
         btn_settings.clicked.connect(self._open_settings)
         toolbar.addWidget(btn_settings)
 
@@ -176,7 +192,7 @@ class MainWindow(QMainWindow):
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
-        self._table.currentRowChanged.connect(self._on_row_changed)
+        self._table.itemSelectionChanged.connect(self._on_selection_changed)
         self._table.doubleClicked.connect(self._on_double_click)
         splitter.addWidget(self._table)
 
@@ -335,6 +351,9 @@ class MainWindow(QMainWindow):
 
     # --- Row actions ---
 
+    def _on_selection_changed(self):
+        self._on_row_changed(self._table.currentRow())
+
     def _on_row_changed(self, row: int):
         if 0 <= row < len(self._entries):
             self._preview.show_result(self._entries[row].selected_result)
@@ -398,7 +417,7 @@ class MainWindow(QMainWindow):
             if self._prefs.get("dark_mode", True):
                 self.setStyleSheet(_DARK_STYLE)
             else:
-                self.setStyleSheet("")
+                self.setStyleSheet(_SETTINGS_TOOLBAR_BTN_QSS.strip())
 
     # --- Helpers ---
 

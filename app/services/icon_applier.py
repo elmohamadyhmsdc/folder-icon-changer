@@ -20,6 +20,12 @@ def _set_attrs(path: str, attrs: int):
     ctypes.windll.kernel32.SetFileAttributesW(path, attrs)
 
 
+def _file_exists_hidden(path: str) -> bool:
+    """GetFileAttributesW returns 0xFFFFFFFF (-1) when the file does not exist."""
+    attrs = ctypes.windll.kernel32.GetFileAttributesW(path)
+    return attrs != 0xFFFFFFFF
+
+
 def _refresh_explorer():
     ctypes.windll.shell32.SHChangeNotify(_SHCNE_ASSOCCHANGED, _SHCNF_IDLIST, None, None)
 
@@ -35,14 +41,16 @@ def apply(folder_path: str, ico_source: str) -> bool:
         _save_undo_state(folder_path)
 
         ico_dest = os.path.join(folder_path, _ICON_FILE)
+
+        # Clear any existing hidden/system/readonly flags so we can overwrite
+        for path in [ico_dest, os.path.join(folder_path, _DESKTOP_INI)]:
+            if os.path.exists(path) or _file_exists_hidden(path):
+                _set_attrs(path, 0x80)  # FILE_ATTRIBUTE_NORMAL
+
         shutil.copy2(ico_source, ico_dest)
         _set_attrs(ico_dest, _FILE_ATTRIBUTE_HIDDEN | _FILE_ATTRIBUTE_SYSTEM)
 
         ini_path = os.path.join(folder_path, _DESKTOP_INI)
-
-        # Remove old desktop.ini attributes so we can overwrite
-        if os.path.exists(ini_path):
-            _set_attrs(ini_path, 0x80)  # FILE_ATTRIBUTE_NORMAL
 
         with open(ini_path, "w", encoding="utf-16") as f:
             f.write("[.ShellClassInfo]\r\n")
@@ -56,6 +64,8 @@ def apply(folder_path: str, ico_source: str) -> bool:
         _refresh_explorer()
         return True
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return False
 
 

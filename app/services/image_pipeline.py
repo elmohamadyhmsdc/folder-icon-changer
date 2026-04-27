@@ -95,6 +95,28 @@ def _glassmorphism_frame(img: Image.Image) -> Image.Image:
     return result
 
 
+def _fit_to_square(img: Image.Image, size: int) -> Image.Image:
+    """
+    Scale image to fill the full square (object-fit: cover).
+    Crops only the minimum amount, with a slight upward bias so faces/titles
+    stay visible. No black bars, no tiny thumbnails.
+    """
+    img = img.convert("RGBA")
+    w, h = img.size
+
+    # Scale so the shorter dimension fills the square exactly
+    scale = max(size / w, size / h)
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+    img = img.resize((new_w, new_h), Image.LANCZOS)
+
+    # Crop excess: center horizontally, 35% from top vertically
+    # (upper-center bias keeps faces/logos in frame)
+    left = (new_w - size) // 2
+    top = int((new_h - size) * 0.35)
+    return img.crop((left, top, left + size, top + size))
+
+
 def _compose(img: Image.Image, style: str, score: Optional[float], radius: int) -> Image.Image:
     img = img.convert("RGBA")
     size = img.size[0]  # assume square at this point
@@ -145,30 +167,19 @@ def build_ico(
         scale = 4 if img.width < 150 else 2
         img = upscaler.upscale(img, scale=scale, noise=2)
 
-    # Crop to square (center crop)
-    w, h = img.size
-    side = min(w, h)
-    left = (w - side) // 2
-    top = (h - side) // 2
-    img = img.crop((left, top, left + side, top + side))
-
-    # Resize to target
-    img = img.resize((target_size, target_size), Image.LANCZOS)
+    # Fit poster into square canvas with blurred background fill
+    img = _fit_to_square(img, target_size)
 
     effective_style = "rating_badge" if show_badge else style
     img = _compose(img, effective_style, score, radius)
 
-    # Build multi-resolution .ico
+    # Build multi-resolution .ico — explicit per-size images (Pillow ICO requirement)
     sizes_to_embed = [s for s in _ICON_SIZES if s[0] <= target_size]
-    resized_images = [img.resize(s, Image.LANCZOS) for s in sizes_to_embed]
+    frames = [img.resize(s, Image.LANCZOS).convert("RGBA") for s in sizes_to_embed]
 
     try:
-        img.save(
-            output_path,
-            format="ICO",
-            sizes=sizes_to_embed,
-            append_images=resized_images[1:],
-        )
+        # Save largest first, append smaller — Pillow ICO requires largest as the base
+        frames[0].save(output_path, format="ICO", append_images=frames[1:])
         return True
     except Exception:
         return False
