@@ -1,6 +1,6 @@
 from typing import Optional, List
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QListWidget, QListWidgetItem, QComboBox, QLabel, QDialogButtonBox,
@@ -33,7 +33,9 @@ class SearchDialog(QDialog):
     def __init__(self, initial_query: str, initial_type: ContentType, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Search Override")
-        self.setMinimumSize(700, 500)
+        self.setMinimumSize(750, 520)
+        if parent is not None:
+            self.setStyleSheet(parent.styleSheet())
         self._results: List[SearchResult] = []
         self.selected: Optional[SearchResult] = None
         self._worker: Optional[_SearchWorker] = None
@@ -41,9 +43,12 @@ class SearchDialog(QDialog):
 
     def _build_ui(self, query: str, content_type: ContentType):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
         # Search bar row
         row = QHBoxLayout()
+        row.setSpacing(8)
         self._query_edit = QLineEdit(query)
         self._query_edit.setPlaceholderText("Title to search…")
         self._query_edit.returnPressed.connect(self._do_search)
@@ -56,25 +61,29 @@ class SearchDialog(QDialog):
         row.addWidget(self._type_combo, stretch=1)
 
         search_btn = QPushButton("Search")
+        search_btn.setObjectName("primaryBtn")
         search_btn.clicked.connect(self._do_search)
         row.addWidget(search_btn)
         layout.addLayout(row)
 
         # Body: results list + preview
         body = QHBoxLayout()
+        body.setSpacing(10)
 
         self._list = QListWidget()
         self._list.currentRowChanged.connect(self._on_row_changed)
         body.addWidget(self._list, stretch=2)
 
         self._preview = PreviewWidget()
-        self._preview.setMinimumWidth(240)
+        self._preview.setMinimumWidth(260)
         body.addWidget(self._preview, stretch=1)
 
         layout.addLayout(body)
 
         self._status = QLabel("Enter a query and press Search.")
-        self._status.setStyleSheet("color: #aaa; font-size: 11px;")
+        self._status.setStyleSheet(
+            "color: #6060a0; font-size: 11px; background: transparent;"
+        )
         layout.addWidget(self._status)
 
         buttons = QDialogButtonBox(
@@ -104,8 +113,13 @@ class SearchDialog(QDialog):
             self._status.setText("No results found.")
             return
         for r in results:
-            label = f"{r.title}  ({r.year})  ★{r.score or '?'}  [{r.confidence:.0f}%]"
-            self._list.addItem(QListWidgetItem(label))
+            score_str = f"★ {r.score:.1f}" if r.score is not None else "★ ?"
+            year_str = f"  ({r.year})" if r.year else ""
+            line1 = f"{r.title or 'Unknown'}{year_str}"
+            line2 = f"{score_str}   {r.source}   {r.confidence:.0f}% match"
+            item = QListWidgetItem(f"{line1}\n{line2}")
+            item.setSizeHint(QSize(0, 52))
+            self._list.addItem(item)
         self._list.setCurrentRow(0)
         self._status.setText(f"{len(results)} results found.")
 

@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QFileDialog, QStatusBar, QLabel, QProgressBar, QSplitter,
-    QAbstractItemView, QMessageBox,
+    QAbstractItemView, QMessageBox, QFrame,
 )
 
 from app.config import load_prefs
@@ -73,7 +73,7 @@ class _ApplyWorker(QThread):
             )
             if ok:
                 ok = icon_applier.apply(self.entry.path, ico_path)
-        except Exception as exc:
+        except Exception:
             import traceback
             traceback.print_exc()
         finally:
@@ -96,29 +96,339 @@ _STATUS_DONE = "Applied ✓"
 _STATUS_FAILED = "Failed ✗"
 _STATUS_SKIPPED = "Skipped"
 
-# Narrow toolbar gear button: global QPushButton uses 12px horizontal padding, which
-# crushes a glyph inside a 32px-wide button (see settings toolbar).
+# Retained for light-mode: keeps the gear button from being squashed
 _SETTINGS_TOOLBAR_BTN_QSS = "QPushButton#settingsToolbarButton { padding: 5px 6px; }\n"
 
-_DARK_STYLE = (
-    """
-QMainWindow, QWidget { background: #1a1a1a; color: #e0e0e0; }
-QTableWidget { background: #222; gridline-color: #333; color: #ddd; }
-QTableWidget::item:selected { background: #3a3a6a; }
-QHeaderView::section { background: #2a2a2a; color: #aaa; border: 1px solid #333; padding: 4px; }
-QPushButton { background: #2d2d2d; color: #ddd; border: 1px solid #444; border-radius: 4px; padding: 5px 12px; }
+_DARK_STYLE = """
+QMainWindow, QDialog, QWidget {
+    background: #0d0d12;
+    color: #e2e2f0;
+    font-family: "Segoe UI";
+    font-size: 13px;
+}
+
+/* ── Toolbar ──────────────────────────────────────────────── */
+QFrame#toolbarFrame {
+    background: #13131a;
+    border-bottom: 1px solid #1e1e2e;
+}
+
+/* ── Buttons — default ───────────────────────────────────── */
+QPushButton {
+    background: #1c1c28;
+    color: #c8c8e8;
+    border: 1px solid #2e2e45;
+    border-radius: 6px;
+    padding: 5px 14px;
+    min-height: 28px;
+}
+QPushButton:hover {
+    background: #26263a;
+    border-color: #3e3e5a;
+    color: #e2e2f0;
+}
+QPushButton:pressed {
+    background: #1a1a26;
+    border-color: #6366f1;
+}
+QPushButton:disabled {
+    color: #3a3a5a;
+    border-color: #1e1e2e;
+    background: #141420;
+}
+
+/* ── Buttons — primary (accent indigo) ───────────────────── */
+QPushButton#primaryBtn {
+    background: #4f52cc;
+    color: #ffffff;
+    border: 1px solid #6366f1;
+    font-weight: bold;
+}
+QPushButton#primaryBtn:hover {
+    background: #6366f1;
+    border-color: #818cf8;
+}
+QPushButton#primaryBtn:pressed {
+    background: #3b3eaa;
+}
+QPushButton#primaryBtn:disabled {
+    background: #2a2a40;
+    border-color: #2a2a40;
+    color: #5a5a80;
+}
+
+/* ── Buttons — danger (red) ──────────────────────────────── */
+QPushButton#dangerBtn {
+    background: #3a1010;
+    color: #f87171;
+    border: 1px solid #7f1d1d;
+}
+QPushButton#dangerBtn:hover {
+    background: #5c1a1a;
+    border-color: #ef4444;
+    color: #fca5a5;
+}
+QPushButton#dangerBtn:pressed {
+    background: #2a0c0c;
+}
+
+/* Gear button needs tighter horizontal padding */
+QPushButton#settingsToolbarButton {
+    padding: 5px 6px;
+    min-height: 28px;
+}
+
+/* ── Table ────────────────────────────────────────────────── */
+QTableWidget {
+    background: #0d0d12;
+    alternate-background-color: #101018;
+    gridline-color: transparent;
+    color: #d0d0e8;
+    border: none;
+}
+QTableWidget::item {
+    padding: 4px 8px;
+    border: none;
+}
+QTableWidget::item:selected {
+    background: #1e1e3a;
+    color: #e2e2f0;
+}
+QTableWidget::item:hover {
+    background: #141428;
+}
+QHeaderView::section {
+    background: #13131a;
+    color: #6060a0;
+    border: none;
+    border-bottom: 1px solid #1e1e2e;
+    border-right: 1px solid #1a1a28;
+    padding: 5px 8px;
+    font-size: 11px;
+    font-weight: bold;
+}
+QHeaderView {
+    background: #13131a;
+}
+
+/* ── Splitter ─────────────────────────────────────────────── */
+QSplitter::handle {
+    background: #262638;
+}
+QSplitter::handle:horizontal {
+    width: 1px;
+}
+
+/* ── Input fields ─────────────────────────────────────────── */
+QLineEdit, QSpinBox {
+    background: #1c1c28;
+    color: #e2e2f0;
+    border: 1px solid #2e2e45;
+    border-radius: 5px;
+    padding: 5px 8px;
+    min-height: 26px;
+    selection-background-color: #4f52cc;
+}
+QLineEdit:focus, QSpinBox:focus {
+    border-color: #6366f1;
+    background: #1e1e2e;
+}
+QLineEdit:disabled, QSpinBox:disabled {
+    color: #4a4a6a;
+    background: #141420;
+}
+QSpinBox::up-button, QSpinBox::down-button {
+    background: #26263a;
+    border: none;
+    width: 18px;
+    border-radius: 2px;
+}
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {
+    background: #3a3a58;
+}
+
+/* ── ComboBox ─────────────────────────────────────────────── */
+QComboBox {
+    background: #1c1c28;
+    color: #e2e2f0;
+    border: 1px solid #2e2e45;
+    border-radius: 5px;
+    padding: 5px 8px;
+    min-height: 26px;
+}
+QComboBox:focus {
+    border-color: #6366f1;
+}
+QComboBox::drop-down {
+    border: none;
+    width: 22px;
+}
+QComboBox QAbstractItemView {
+    background: #1c1c28;
+    color: #e2e2f0;
+    border: 1px solid #2e2e45;
+    selection-background-color: #2e2e4a;
+    outline: none;
+    padding: 2px;
+}
+
+/* ── CheckBox ─────────────────────────────────────────────── */
+QCheckBox {
+    spacing: 8px;
+    color: #c8c8e8;
+}
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid #3e3e5a;
+    background: #1c1c28;
+}
+QCheckBox::indicator:checked {
+    background: #6366f1;
+    border-color: #6366f1;
+}
+QCheckBox::indicator:hover {
+    border-color: #6366f1;
+}
+
+/* ── Tab widget ───────────────────────────────────────────── */
+QTabWidget::pane {
+    border: 1px solid #1e1e2e;
+    background: #0d0d12;
+    top: -1px;
+}
+QTabBar::tab {
+    background: #13131a;
+    color: #7070a0;
+    border: 1px solid #1e1e2e;
+    border-bottom: none;
+    padding: 7px 16px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-right: 2px;
+}
+QTabBar::tab:selected {
+    background: #0d0d12;
+    color: #e2e2f0;
+    border-bottom: 1px solid #0d0d12;
+}
+QTabBar::tab:hover:!selected {
+    background: #1a1a28;
+    color: #a0a0c8;
+}
+
+/* ── List widget ──────────────────────────────────────────── */
+QListWidget {
+    background: #0d0d12;
+    color: #d0d0e8;
+    border: 1px solid #1e1e2e;
+    border-radius: 6px;
+    outline: none;
+}
+QListWidget::item {
+    padding: 8px 10px;
+    border-bottom: 1px solid #141420;
+    min-height: 34px;
+}
+QListWidget::item:selected {
+    background: #1e1e3a;
+    color: #e2e2f0;
+}
+QListWidget::item:hover {
+    background: #16162a;
+}
+
+/* ── Scrollbars ───────────────────────────────────────────── */
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical {
+    background: #2e2e45;
+    border-radius: 4px;
+    min-height: 24px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #5a5a90;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+QScrollBar:horizontal {
+    background: transparent;
+    height: 8px;
+    margin: 0px;
+}
+QScrollBar::handle:horizontal {
+    background: #2e2e45;
+    border-radius: 4px;
+    min-width: 24px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: #5a5a90;
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+/* ── Status bar ───────────────────────────────────────────── */
+QStatusBar {
+    background: #0a0a10;
+    color: #5a5a80;
+    border-top: 1px solid #1a1a28;
+    font-size: 12px;
+}
+
+/* ── Progress bar ─────────────────────────────────────────── */
+QProgressBar {
+    background: #1c1c28;
+    border: none;
+    border-radius: 4px;
+    text-align: center;
+    color: #9090b0;
+    font-size: 11px;
+    max-height: 8px;
+}
+QProgressBar::chunk {
+    background: #6366f1;
+    border-radius: 4px;
+}
+
+/* ── Dialog buttons ───────────────────────────────────────── */
+QDialogButtonBox QPushButton {
+    min-width: 80px;
+}
+
+/* ── Group box ────────────────────────────────────────────── */
+QGroupBox {
+    color: #7070a0;
+    border: 1px solid #1e1e2e;
+    border-radius: 6px;
+    margin-top: 12px;
+    padding-top: 8px;
+    font-size: 11px;
+    font-weight: bold;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 6px;
+    left: 10px;
+}
+
+/* ── Labels & dialogs ─────────────────────────────────────── */
+QLabel {
+    color: #c8c8e8;
+}
+QMessageBox {
+    background: #13131a;
+}
+QMessageBox QLabel {
+    color: #e2e2f0;
+}
 """
-    + _SETTINGS_TOOLBAR_BTN_QSS
-    + """
-QPushButton:hover { background: #3a3a3a; }
-QPushButton:disabled { color: #555; }
-QLineEdit, QComboBox, QSpinBox { background: #2a2a2a; color: #ddd; border: 1px solid #444; border-radius: 3px; padding: 3px; }
-QStatusBar { background: #222; color: #888; }
-QProgressBar { background: #2a2a2a; border: 1px solid #444; border-radius: 3px; text-align: center; color: #ccc; }
-QProgressBar::chunk { background: #4a6fa5; border-radius: 2px; }
-QSplitter::handle { background: #333; }
-"""
-)
 
 
 class MainWindow(QMainWindow):
@@ -141,11 +451,16 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
-        root.setContentsMargins(8, 8, 8, 4)
-        root.setSpacing(6)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        # Toolbar
-        toolbar = QHBoxLayout()
+        # ── Toolbar (full-width framed container) ──────────────
+        toolbar_frame = QFrame()
+        toolbar_frame.setObjectName("toolbarFrame")
+        toolbar = QHBoxLayout(toolbar_frame)
+        toolbar.setContentsMargins(10, 7, 10, 7)
+        toolbar.setSpacing(5)
+
         btn_folder = QPushButton("+ Add Folder(s)")
         btn_folder.clicked.connect(self._pick_folders)
         toolbar.addWidget(btn_folder)
@@ -154,9 +469,16 @@ class MainWindow(QMainWindow):
         btn_parent.clicked.connect(self._pick_parent)
         toolbar.addWidget(btn_parent)
 
-        toolbar.addStretch()
+        # Visual separator between Add group and Process group
+        sep = QFrame()
+        sep.setFixedWidth(1)
+        sep.setFixedHeight(22)
+        sep.setStyleSheet("background-color: #2e2e45;")
+        toolbar.addWidget(sep)
+        toolbar.addSpacing(2)
 
         btn_run = QPushButton("▶  Run All")
+        btn_run.setObjectName("primaryBtn")
         btn_run.clicked.connect(self._run_all)
         toolbar.addWidget(btn_run)
 
@@ -165,6 +487,7 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(btn_run_sel)
 
         btn_undo = QPushButton("↩  Undo All")
+        btn_undo.setObjectName("dangerBtn")
         btn_undo.clicked.connect(self._undo_all)
         toolbar.addWidget(btn_undo)
 
@@ -172,18 +495,26 @@ class MainWindow(QMainWindow):
         btn_clear.clicked.connect(self._clear_list)
         toolbar.addWidget(btn_clear)
 
+        toolbar.addStretch()
+
         btn_settings = QPushButton("⚙")
         btn_settings.setObjectName("settingsToolbarButton")
         btn_settings.setFixedWidth(40)
         btn_settings.clicked.connect(self._open_settings)
         toolbar.addWidget(btn_settings)
 
-        root.addLayout(toolbar)
+        root.addWidget(toolbar_frame)
+
+        # ── Content area (padded) ──────────────────────────────
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(8, 8, 8, 4)
+        content_layout.setSpacing(6)
 
         # Main splitter: table | preview
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # Table
+        # Folder table
         self._table = QTableWidget(0, 5)
         self._table.setHorizontalHeaderLabels(["Folder", "Type", "Best Match", "Conf.", "Status"])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -192,20 +523,24 @@ class MainWindow(QMainWindow):
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
+        self._table.setShowGrid(False)
+        self._table.verticalHeader().setDefaultSectionSize(32)
         self._table.itemSelectionChanged.connect(self._on_selection_changed)
         self._table.doubleClicked.connect(self._on_double_click)
         splitter.addWidget(self._table)
 
         # Right panel: preview + action buttons
-        right = QWidget()
+        right = QFrame()
+        right.setObjectName("rightPanel")
         right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(4, 0, 0, 0)
-        right_layout.setSpacing(6)
+        right_layout.setContentsMargins(8, 8, 4, 8)
+        right_layout.setSpacing(8)
 
         self._preview = PreviewWidget()
         right_layout.addWidget(self._preview)
 
         btn_apply = QPushButton("✓  Apply This Icon")
+        btn_apply.setObjectName("primaryBtn")
         btn_apply.clicked.connect(self._apply_selected_row)
         right_layout.addWidget(btn_apply)
 
@@ -218,6 +553,7 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(btn_search_again)
 
         btn_undo_one = QPushButton("↩  Undo This Folder")
+        btn_undo_one.setObjectName("dangerBtn")
         btn_undo_one.clicked.connect(self._undo_selected_row)
         right_layout.addWidget(btn_undo_one)
 
@@ -228,7 +564,8 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 1)
 
-        root.addWidget(splitter)
+        content_layout.addWidget(splitter)
+        root.addWidget(content, 1)
 
         # Status bar
         self._status_bar = QStatusBar()
@@ -239,7 +576,7 @@ class MainWindow(QMainWindow):
         self._status_bar.addPermanentWidget(self._progress)
         self._status_bar.showMessage("Ready")
 
-    # --- Folder management ---
+    # ── Folder management ──────────────────────────────────────
 
     def _pick_folders(self):
         folders = QFileDialog.getExistingDirectory(self, "Select Folder")
@@ -276,7 +613,7 @@ class MainWindow(QMainWindow):
         self._table.setRowCount(0)
         self._preview.show_result(None)
 
-    # --- Processing ---
+    # ── Processing ─────────────────────────────────────────────
 
     def _run_all(self):
         rows = range(len(self._entries))
@@ -320,7 +657,6 @@ class MainWindow(QMainWindow):
             self._table.item(row, _COL_CONF).setText("—")
             self._set_status_cell(row, _STATUS_SKIPPED)
 
-        # Auto-apply if confidence is high enough
         prefs = load_prefs()
         threshold = prefs.get("auto_apply_threshold", 85)
         if results and results[0].confidence >= threshold:
@@ -349,7 +685,7 @@ class MainWindow(QMainWindow):
             self._progress.setVisible(False)
             self._status_bar.showMessage("Done.")
 
-    # --- Row actions ---
+    # ── Row actions ────────────────────────────────────────────
 
     def _on_selection_changed(self):
         self._on_row_changed(self._table.currentRow())
@@ -408,7 +744,7 @@ class MainWindow(QMainWindow):
             self._set_status_cell(row, _STATUS_READY)
             self._preview.show_result(dlg.selected)
 
-    # --- Settings ---
+    # ── Settings ───────────────────────────────────────────────
 
     def _open_settings(self):
         dlg = SettingsDialog(self)
@@ -419,7 +755,7 @@ class MainWindow(QMainWindow):
             else:
                 self.setStyleSheet(_SETTINGS_TOOLBAR_BTN_QSS.strip())
 
-    # --- Helpers ---
+    # ── Helpers ────────────────────────────────────────────────
 
     def _set_status_cell(self, row: int, status: str):
         item = self._table.item(row, _COL_STATUS)
@@ -427,14 +763,17 @@ class MainWindow(QMainWindow):
             item = QTableWidgetItem()
             self._table.setItem(row, _COL_STATUS, item)
         item.setText(status)
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        # (foreground, subtle background tint) pairs per status
         color_map = {
-            _STATUS_PENDING: "#555",
-            _STATUS_SEARCHING: "#4a90e2",
-            _STATUS_READY: "#e2a84a",
-            _STATUS_APPLYING: "#4a90e2",
-            _STATUS_DONE: "#4caf50",
-            _STATUS_FAILED: "#e25c4a",
-            _STATUS_SKIPPED: "#777",
+            _STATUS_PENDING:   ("#5a5a80", "#101018"),
+            _STATUS_SEARCHING: ("#60a5fa", "#0d1a2e"),
+            _STATUS_READY:     ("#fbbf24", "#1e180a"),
+            _STATUS_APPLYING:  ("#818cf8", "#0f0f22"),
+            _STATUS_DONE:      ("#4ade80", "#0a1c0f"),
+            _STATUS_FAILED:    ("#f87171", "#1c0a0a"),
+            _STATUS_SKIPPED:   ("#4a4a68", "#0e0e16"),
         }
-        fg = color_map.get(status, "#ccc")
+        fg, bg = color_map.get(status, ("#c8c8e8", "#0d0d12"))
         item.setForeground(QBrush(QColor(fg)))
+        item.setBackground(QBrush(QColor(bg)))

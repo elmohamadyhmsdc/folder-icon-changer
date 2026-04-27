@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton,
-    QCheckBox, QComboBox, QSpinBox, QDialogButtonBox, QGroupBox,
+    QDialog, QVBoxLayout, QFormLayout, QLineEdit,
+    QCheckBox, QComboBox, QSpinBox, QDialogButtonBox,
     QLabel, QTabWidget, QWidget,
 )
 from PyQt6.QtCore import Qt
@@ -12,18 +12,21 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Settings")
-        self.setMinimumWidth(480)
+        self.setMinimumWidth(520)
+        if parent is not None:
+            self.setStyleSheet(parent.styleSheet())
         self._prefs = load_prefs()
         self._build_ui()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        tabs = QTabWidget()
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
 
+        tabs = QTabWidget()
         tabs.addTab(self._build_api_tab(), "API Keys")
         tabs.addTab(self._build_icon_tab(), "Icon Style")
         tabs.addTab(self._build_behavior_tab(), "Behavior")
-
         layout.addWidget(tabs)
 
         buttons = QDialogButtonBox(
@@ -33,10 +36,14 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    # --- API Keys tab ---
+    # ── API Keys tab ───────────────────────────────────────────
+
     def _build_api_tab(self) -> QWidget:
         w = QWidget()
         form = QFormLayout(w)
+        form.setContentsMargins(12, 16, 12, 12)
+        form.setSpacing(10)
+        form.setHorizontalSpacing(12)
 
         self._tmdb_key = QLineEdit(get_api_key("tmdb"))
         self._tmdb_key.setEchoMode(QLineEdit.EchoMode.Password)
@@ -56,14 +63,25 @@ class SettingsDialog(QDialog):
             "AniList (anime) requires no API key.\n"
             "TMDB key: themoviedb.org  |  IGDB: dev.twitch.tv"
         )
-        note.setStyleSheet("color: #888; font-size: 11px;")
+        note.setStyleSheet(
+            "color: #7070a0;"
+            " font-size: 11px;"
+            " background: #13131a;"
+            " border: 1px solid #1e1e2e;"
+            " border-radius: 5px;"
+            " padding: 8px 10px;"
+        )
         form.addRow(note)
         return w
 
-    # --- Icon Style tab ---
+    # ── Icon Style tab ─────────────────────────────────────────
+
     def _build_icon_tab(self) -> QWidget:
         w = QWidget()
         form = QFormLayout(w)
+        form.setContentsMargins(12, 16, 12, 12)
+        form.setSpacing(10)
+        form.setHorizontalSpacing(12)
 
         self._style_combo = QComboBox()
         styles = [
@@ -101,10 +119,14 @@ class SettingsDialog(QDialog):
 
         return w
 
-    # --- Behavior tab ---
+    # ── Behavior tab ───────────────────────────────────────────
+
     def _build_behavior_tab(self) -> QWidget:
         w = QWidget()
         form = QFormLayout(w)
+        form.setContentsMargins(12, 16, 12, 12)
+        form.setSpacing(10)
+        form.setHorizontalSpacing(12)
 
         self._upscale_check = QCheckBox("AI upscale low-res anime images (waifu2x)")
         self._upscale_check.setChecked(self._prefs.get("upscale_anime", True))
@@ -116,9 +138,18 @@ class SettingsDialog(QDialog):
         self._threshold_spin.setValue(self._prefs.get("auto_apply_threshold", 85))
         form.addRow("Auto-apply threshold:", self._threshold_spin)
 
-        note = QLabel("Folders with match confidence above this threshold are applied automatically.")
+        note = QLabel(
+            "Folders with match confidence above this threshold are applied automatically."
+        )
         note.setWordWrap(True)
-        note.setStyleSheet("color: #888; font-size: 11px;")
+        note.setStyleSheet(
+            "color: #7070a0;"
+            " font-size: 11px;"
+            " background: #13131a;"
+            " border: 1px solid #1e1e2e;"
+            " border-radius: 5px;"
+            " padding: 8px 10px;"
+        )
         form.addRow(note)
 
         self._dark_check = QCheckBox("Dark mode")
@@ -128,12 +159,10 @@ class SettingsDialog(QDialog):
         return w
 
     def _save(self):
-        # API keys
         set_api_key("tmdb", self._tmdb_key.text().strip())
         set_api_key("igdb_client_id", self._igdb_id.text().strip())
         set_api_key("igdb_client_secret", self._igdb_secret.text().strip())
 
-        # Preferences
         self._prefs.update({
             "icon_style": self._style_combo.currentData(),
             "rounded_corners": self._rounded.isChecked(),

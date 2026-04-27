@@ -3,9 +3,9 @@ from typing import Optional
 
 import requests
 from PIL import Image, ImageDraw
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QPixmap, QImage
-from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget, QSizePolicy
+from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget, QFrame
 
 from app.services.searcher import SearchResult
 
@@ -37,34 +37,70 @@ class PreviewWidget(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # Card container — gives the panel a raised, distinct surface
+        card = QFrame()
+        card.setObjectName("previewCard")
+        card.setStyleSheet(
+            "QFrame#previewCard {"
+            " background: #13131a;"
+            " border: 1px solid #1e1e2e;"
+            " border-radius: 10px;"
+            "}"
+        )
+        card_layout = QVBoxLayout(card)
+        card_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        card_layout.setContentsMargins(12, 16, 12, 16)
+        card_layout.setSpacing(10)
 
         self._icon_label = QLabel()
-        self._icon_label.setFixedSize(220, 220)
+        self._icon_label.setFixedSize(240, 240)
         self._icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._icon_label.setStyleSheet(
-            "background: #1e1e1e; border-radius: 12px; border: 1px solid #333;"
+            "background: #0d0d12;"
+            " border-radius: 12px;"
+            " border: 1px solid #262638;"
+            " color: #4a4a6a;"
+            " font-size: 12px;"
         )
-        layout.addWidget(self._icon_label)
+        card_layout.addWidget(self._icon_label)
 
         self._title_label = QLabel("—")
         self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._title_label.setWordWrap(True)
-        self._title_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #eee;")
-        layout.addWidget(self._title_label)
+        self._title_label.setStyleSheet(
+            "background: transparent;"
+            " border: none;"
+            " font-weight: bold;"
+            " font-size: 14px;"
+            " color: #e2e2f0;"
+        )
+        card_layout.addWidget(self._title_label)
 
         self._meta_label = QLabel("")
         self._meta_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._meta_label.setStyleSheet("font-size: 11px; color: #aaa;")
-        layout.addWidget(self._meta_label)
+        self._meta_label.setStyleSheet(
+            "background: transparent;"
+            " border: none;"
+            " font-size: 12px;"
+            " color: #818cf8;"
+        )
+        card_layout.addWidget(self._meta_label)
 
         self._source_label = QLabel("")
         self._source_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._source_label.setStyleSheet("font-size: 10px; color: #666;")
-        layout.addWidget(self._source_label)
+        self._source_label.setStyleSheet(
+            "background: transparent;"
+            " border: none;"
+            " font-size: 10px;"
+            " color: #5a5a80;"
+        )
+        card_layout.addWidget(self._source_label)
+
+        outer.addWidget(card)
 
     def show_result(self, result: Optional[SearchResult]):
         self._result = result
@@ -105,7 +141,7 @@ class PreviewWidget(QWidget):
     def _on_image_loaded(self, data: bytes):
         try:
             from PIL import ImageFilter
-            size = 220
+            size = 240
             src = Image.open(io.BytesIO(data)).convert("RGBA")
             w, h = src.size
 
