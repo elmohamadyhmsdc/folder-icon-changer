@@ -14,6 +14,11 @@ def main():
     app.setApplicationName("Folder Icon Changer")
     app.setOrganizationName("FolderIconChanger")
 
+    _icon_path = os.path.join(os.path.dirname(__file__), "resources", "icon.png")
+    if os.path.exists(_icon_path):
+        app_icon = QIcon(_icon_path)
+        app.setWindowIcon(app_icon)
+
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
