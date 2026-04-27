@@ -96,9 +96,6 @@ _STATUS_DONE = "Applied ✓"
 _STATUS_FAILED = "Failed ✗"
 _STATUS_SKIPPED = "Skipped"
 
-# Retained for light-mode: keeps the gear button from being squashed
-_SETTINGS_TOOLBAR_BTN_QSS = "QPushButton#settingsToolbarButton { padding: 5px 6px; }\n"
-
 _DARK_STYLE = """
 QMainWindow, QDialog, QWidget {
     background: #0d0d12;
@@ -439,10 +436,7 @@ class MainWindow(QMainWindow):
         self._workers: List[QThread] = []
         self._pending_count = 0
         self._setup_ui()
-        if self._prefs.get("dark_mode", True):
-            self.setStyleSheet(_DARK_STYLE)
-        else:
-            self.setStyleSheet(_SETTINGS_TOOLBAR_BTN_QSS.strip())
+        self.setStyleSheet(_DARK_STYLE)
 
     def _setup_ui(self):
         self.setWindowTitle("Folder Icon Changer")
@@ -750,10 +744,6 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self)
         if dlg.exec():
             self._prefs = load_prefs()
-            if self._prefs.get("dark_mode", True):
-                self.setStyleSheet(_DARK_STYLE)
-            else:
-                self.setStyleSheet(_SETTINGS_TOOLBAR_BTN_QSS.strip())
 
     # ── Helpers ────────────────────────────────────────────────
 

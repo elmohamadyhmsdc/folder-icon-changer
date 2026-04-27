@@ -152,10 +152,6 @@ class SettingsDialog(QDialog):
         )
         form.addRow(note)
 
-        self._dark_check = QCheckBox("Dark mode")
-        self._dark_check.setChecked(self._prefs.get("dark_mode", True))
-        form.addRow(self._dark_check)
-
         return w
 
     def _save(self):
@@ -171,7 +167,6 @@ class SettingsDialog(QDialog):
             "icon_size": self._size_spin.value(),
             "upscale_anime": self._upscale_check.isChecked(),
             "auto_apply_threshold": self._threshold_spin.value(),
-            "dark_mode": self._dark_check.isChecked(),
         })
         save_prefs(self._prefs)
         self.accept()
