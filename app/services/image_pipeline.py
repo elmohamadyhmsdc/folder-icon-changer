@@ -51,26 +51,42 @@ def _apply_rounded_corners(img: Image.Image, radius: int) -> Image.Image:
 def _add_rating_badge(img: Image.Image, score: Optional[float]) -> Image.Image:
     if score is None:
         return img
-    badge_size = max(40, img.width // 6)
-    badge = Image.new("RGBA", (badge_size, badge_size // 2 + 4), (0, 0, 0, 0))
+    size = img.width  # square canvas at this point
+    badge_w = max(52, int(size * 0.22))
+    badge_h = max(22, int(badge_w * 0.42))
+    font_size = max(12, int(badge_h * 0.64))
+
+    badge = Image.new("RGBA", (badge_w, badge_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(badge)
+    # Fully-rounded pill, semi-transparent dark background
     draw.rounded_rectangle(
-        [(0, 0), (badge_size - 1, badge_size // 2 + 3)],
-        radius=6,
-        fill=(20, 20, 20, 200),
+        [(0, 0), (badge_w - 1, badge_h - 1)],
+        radius=badge_h // 2,
+        fill=(12, 12, 12, 190),
     )
-    text = f"★{score:.1f}"
-    try:
-        font_size = max(10, badge_size // 4)
-        font = ImageFont.truetype("arial.ttf", font_size)
-    except Exception:
+    # Segoe UI Symbol ships on every Windows 10/11 machine and correctly renders ★ (U+2605).
+    # Arial does NOT include it and shows □ instead, so we try Segoe first.
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont
+    for name in ("seguisym.ttf", "segoeui.ttf", "arialbd.ttf", "arial.ttf"):
+        try:
+            font = ImageFont.truetype(name, font_size)
+            break
+        except Exception:
+            pass
+    else:
         font = ImageFont.load_default()
-    draw.text((4, 2), text, fill=(255, 215, 0, 255), font=font)
+
+    text = f"★ {score:.1f}"
+    # Centre the text inside the pill
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    tx = (badge_w - tw) // 2 - bbox[0]
+    ty = (badge_h - th) // 2 - bbox[1]
+    draw.text((tx, ty), text, fill=(255, 255, 255, 245), font=font)
 
     result = img.copy()
-    x = img.width - badge.width - 4
-    y = img.height - badge.height - 4
-    result.paste(badge, (x, y), badge)
+    margin = max(6, int(size * 0.035))
+    result.paste(badge, (size - badge_w - margin, size - badge_h - margin), badge)
     return result
 
 
@@ -138,26 +154,19 @@ def _fit_to_square(img: Image.Image, size: int) -> Image.Image:
     return bg
 
 
-def _compose(img: Image.Image, style: str, score: Optional[float], radius: int) -> Image.Image:
+def _compose(img: Image.Image, style: str, radius: int) -> Image.Image:
+    """Apply the chosen frame decoration (rounded corners, border, glassmorphism).
+    Badge overlay is handled separately in build_ico."""
     img = img.convert("RGBA")
-    size = img.size[0]  # assume square at this point
 
-    if style == "clean_poster":
-        if radius > 0:
-            img = _apply_rounded_corners(img, radius)
-    elif style == "framed":
+    if style == "framed":
         img = _add_border_frame(img)
-        if radius > 0:
-            img = _apply_rounded_corners(img, radius)
     elif style == "glassmorphism":
         img = _glassmorphism_frame(img)
-        if radius > 0:
-            img = _apply_rounded_corners(img, radius)
-    elif style == "rating_badge":
-        if radius > 0:
-            img = _apply_rounded_corners(img, radius)
-        img = _add_rating_badge(img, score)
-    # "minimal" — no decorations
+    # clean_poster, minimal, rating_badge → no extra frame decoration
+
+    if radius > 0 and style != "minimal":
+        img = _apply_rounded_corners(img, radius)
 
     return img
 
@@ -191,8 +200,10 @@ def build_ico(
     # Fit poster into square canvas with blurred background fill
     img = _fit_to_square(img, target_size)
 
-    effective_style = "rating_badge" if show_badge else style
-    img = _compose(img, effective_style, score, radius)
+    img = _compose(img, style, radius)
+    # Badge is applied if the checkbox is on OR if "Rating Badge" is the chosen style
+    if show_badge or style == "rating_badge":
+        img = _add_rating_badge(img, score)
 
     # Build multi-resolution .ico — explicit per-size images (Pillow ICO requirement)
     sizes_to_embed = [s for s in _ICON_SIZES if s[0] <= target_size]
