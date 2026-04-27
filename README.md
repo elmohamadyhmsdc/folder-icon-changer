@@ -64,9 +64,13 @@ Folder name
 
 ## Screenshots
 
-| Folder list after processing | Example artwork source |
-|---|---|
-| *(see app screenshot in repo)* | *(TMDB, AniList, IGDB)* |
+**App UI — folder list after a batch run, with the preview panel showing the selected match:**
+
+![Folder Icon Changer UI](docs/screenshots/app-ui.png)
+
+**Result in Windows Explorer — folders with custom poster icons applied:**
+
+![Explorer result](docs/screenshots/result-explorer.png)
 
 ---
 
