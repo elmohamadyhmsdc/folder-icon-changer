@@ -30,11 +30,11 @@ def _refresh_explorer():
     ctypes.windll.shell32.SHChangeNotify(_SHCNE_ASSOCCHANGED, _SHCNF_IDLIST, None, None)
 
 
-def apply(folder_path: str, ico_source: str) -> bool:
+def apply(folder_path: str, ico_source: str) -> tuple[bool, str]:
     """
     Copy ico_source into folder_path as folder.ico, write desktop.ini,
     and apply the necessary Windows attributes.
-    Returns True on success.
+    Returns (True, "") on success or (False, error_message) on failure.
     """
     try:
         # Save undo state BEFORE making changes
@@ -62,11 +62,13 @@ def apply(folder_path: str, ico_source: str) -> bool:
         _set_attrs(folder_path, _FILE_ATTRIBUTE_SYSTEM)
 
         _refresh_explorer()
-        return True
+        return True, ""
+    except PermissionError as e:
+        return False, f"Permission denied — try running as Administrator. ({e})"
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return False
+        return False, str(e)
 
 
 def undo(folder_path: str) -> bool:

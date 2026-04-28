@@ -1,3 +1,4 @@
+import ctypes
 import os
 import tempfile
 from dataclasses import dataclass, field
@@ -49,7 +50,7 @@ class _ProcessWorker(QThread):
 
 class _ApplyWorker(QThread):
     """Worker that runs the full image pipeline + icon application."""
-    done = pyqtSignal(int, bool)  # row_idx, success
+    done = pyqtSignal(int, bool, str)  # row_idx, success, error_message
 
     def __init__(self, row: int, entry: FolderEntry):
         super().__init__()
@@ -59,11 +60,12 @@ class _ApplyWorker(QThread):
     def run(self):
         result = self.entry.selected_result
         if result is None or not result.image_url:
-            self.done.emit(self.row, False)
+            self.done.emit(self.row, False, "No image URL available.")
             return
         with tempfile.NamedTemporaryFile(suffix=".ico", delete=False) as f:
             ico_path = f.name
         ok = False
+        error_msg = ""
         try:
             ok = build_ico(
                 result.image_url,
@@ -72,14 +74,17 @@ class _ApplyWorker(QThread):
                 score=result.score,
             )
             if ok:
-                ok = icon_applier.apply(self.entry.path, ico_path)
-        except Exception:
+                ok, error_msg = icon_applier.apply(self.entry.path, ico_path)
+            else:
+                error_msg = "Image pipeline failed to build .ico file."
+        except Exception as exc:
             import traceback
             traceback.print_exc()
+            error_msg = str(exc)
         finally:
             if os.path.exists(ico_path):
                 os.remove(ico_path)
-        self.done.emit(self.row, ok)
+        self.done.emit(self.row, ok, error_msg)
 
 
 _COL_NAME = 0
@@ -429,8 +434,9 @@ QMessageBox QLabel {
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, is_admin: bool = True):
         super().__init__()
+        self._is_admin = is_admin
         self._prefs = load_prefs()
         self._entries: List[FolderEntry] = []
         self._workers: List[QThread] = []
@@ -498,6 +504,38 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(btn_settings)
 
         root.addWidget(toolbar_frame)
+
+        # ── Non-admin warning banner ───────────────────────────
+        self._admin_banner = QFrame()
+        self._admin_banner.setObjectName("adminBanner")
+        self._admin_banner.setStyleSheet(
+            "QFrame#adminBanner { background: #3b2a00; border-bottom: 1px solid #7a5500; }"
+        )
+        banner_layout = QHBoxLayout(self._admin_banner)
+        banner_layout.setContentsMargins(10, 5, 10, 5)
+        banner_layout.setSpacing(10)
+
+        warn_icon = QLabel("⚠")
+        warn_icon.setStyleSheet("color: #fbbf24; font-size: 15px;")
+        banner_layout.addWidget(warn_icon)
+
+        warn_text = QLabel(
+            "Not running as Administrator — icon changes may fail on protected folders."
+        )
+        warn_text.setStyleSheet("color: #fde68a; font-size: 12px;")
+        banner_layout.addWidget(warn_text, 1)
+
+        btn_elevate = QPushButton("Restart as Administrator")
+        btn_elevate.setStyleSheet(
+            "QPushButton { background: #7a5500; color: #fde68a; border: 1px solid #a07000;"
+            " border-radius: 5px; padding: 3px 10px; min-height: 24px; }"
+            "QPushButton:hover { background: #a07000; color: #ffffff; }"
+        )
+        btn_elevate.clicked.connect(self._restart_as_admin)
+        banner_layout.addWidget(btn_elevate)
+
+        self._admin_banner.setVisible(not self._is_admin)
+        root.addWidget(self._admin_banner)
 
         # ── Content area (padded) ──────────────────────────────
         content = QWidget()
@@ -668,9 +706,15 @@ class MainWindow(QMainWindow):
         self._workers.append(w)
         w.start()
 
-    def _on_apply_done(self, row: int, success: bool):
+    def _on_apply_done(self, row: int, success: bool, error_msg: str):
         self._entries[row].applied = success
         self._set_status_cell(row, _STATUS_DONE if success else _STATUS_FAILED)
+        if not success and error_msg:
+            is_permission = "permission" in error_msg.lower() or "access" in error_msg.lower()
+            tip = " — try restarting as Administrator (⚠ banner above)" if is_permission else ""
+            self._status_bar.showMessage(
+                f"Failed: {self._entries[row].name} — {error_msg}{tip}", 8000
+            )
         self._advance_progress()
 
     def _advance_progress(self):
@@ -737,6 +781,17 @@ class MainWindow(QMainWindow):
             self._table.item(row, _COL_CONF).setText(f"{dlg.selected.confidence:.0f}%")
             self._set_status_cell(row, _STATUS_READY)
             self._preview.show_result(dlg.selected)
+
+    # ── Admin elevation ────────────────────────────────────────
+
+    def _restart_as_admin(self):
+        import sys
+        script = os.path.abspath(sys.argv[0])
+        extra = " ".join(f'"{a}"' for a in sys.argv[1:])
+        params = f'"{script}"' if not extra else f'"{script}" {extra}'
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, params, None, 1)
+        import sys as _sys
+        _sys.exit(0)
 
     # ── Settings ───────────────────────────────────────────────
 
