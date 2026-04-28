@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 
 from app.config import load_prefs
 from app.services.detector import detect, ContentType, DetectionResult
-from app.services.searcher import SearchResult, search_for
+from app.services.searcher import SearchResult, search_for, get_missing_keys_info
 from app.services.image_pipeline import build_ico
 from app.services import icon_applier
 from app.ui.preview_widget import PreviewWidget
@@ -537,6 +537,40 @@ class MainWindow(QMainWindow):
         self._admin_banner.setVisible(not self._is_admin)
         root.addWidget(self._admin_banner)
 
+        # ── No API keys warning banner ─────────────────────────
+        self._api_key_banner = QFrame()
+        self._api_key_banner.setObjectName("apiKeyBanner")
+        self._api_key_banner.setStyleSheet(
+            "QFrame#apiKeyBanner { background: #0e0a20; border-bottom: 1px solid #4a3a8a; }"
+        )
+        api_banner_layout = QHBoxLayout(self._api_key_banner)
+        api_banner_layout.setContentsMargins(10, 5, 10, 5)
+        api_banner_layout.setSpacing(10)
+
+        api_icon = QLabel("🔑")
+        api_icon.setStyleSheet("color: #818cf8; font-size: 15px; background: transparent;")
+        api_banner_layout.addWidget(api_icon)
+
+        api_text = QLabel(
+            "No API keys configured — Movies, TV & Game searches will return no results."
+        )
+        api_text.setStyleSheet(
+            "color: #a5b4fc; font-size: 12px; background: transparent;"
+        )
+        api_banner_layout.addWidget(api_text, 1)
+
+        btn_setup_keys = QPushButton("Open Settings to Add Keys")
+        btn_setup_keys.setStyleSheet(
+            "QPushButton { background: #2d1f5e; color: #a5b4fc; border: 1px solid #4a3a8a;"
+            " border-radius: 5px; padding: 3px 10px; min-height: 24px; }"
+            "QPushButton:hover { background: #4a3a8a; color: #ffffff; }"
+        )
+        btn_setup_keys.clicked.connect(self._open_settings)
+        api_banner_layout.addWidget(btn_setup_keys)
+
+        self._api_key_banner.setVisible(self._any_api_key_missing())
+        root.addWidget(self._api_key_banner)
+
         # ── Content area (padded) ──────────────────────────────
         content = QWidget()
         content_layout = QVBoxLayout(content)
@@ -688,6 +722,14 @@ class MainWindow(QMainWindow):
             self._table.item(row, _COL_MATCH).setText("No results")
             self._table.item(row, _COL_CONF).setText("—")
             self._set_status_cell(row, _STATUS_SKIPPED)
+            missing = get_missing_keys_info(detection.content_type)
+            if missing:
+                labels = ", ".join(m["label"].split("  (")[0] for m in missing)
+                self._status_bar.showMessage(
+                    f"Skipped \"{entry.name}\" — missing API key: {labels}. "
+                    "Open ⚙ Settings to add credentials.",
+                    10000,
+                )
 
         prefs = load_prefs()
         threshold = prefs.get("auto_apply_threshold", 85)
@@ -799,6 +841,17 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self)
         if dlg.exec():
             self._prefs = load_prefs()
+            self._refresh_api_key_banner()
+
+    # ── API key banner helpers ─────────────────────────────────
+
+    @staticmethod
+    def _any_api_key_missing() -> bool:
+        from app.services.detector import ContentType
+        return bool(get_missing_keys_info(ContentType.UNKNOWN))
+
+    def _refresh_api_key_banner(self):
+        self._api_key_banner.setVisible(self._any_api_key_missing())
 
     # ── Helpers ────────────────────────────────────────────────
 

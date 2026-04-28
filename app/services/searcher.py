@@ -147,6 +147,35 @@ def search_game(query: str) -> List[SearchResult]:
     return [_igdb_to_result(e, c) for e, c in ranked]
 
 
+def get_missing_keys_info(content_type: ContentType) -> List[dict]:
+    """Return info about API credentials that are absent for the given content type.
+
+    Each entry in the returned list is a dict with keys:
+        service     — internal key name (e.g. "tmdb")
+        label       — human-readable service name
+        url         — direct link to the API key / credentials page
+        signup_url  — registration page for users without an account
+    """
+    missing: List[dict] = []
+    if content_type in (ContentType.MOVIE, ContentType.TV, ContentType.UNKNOWN):
+        if not get_api_key("tmdb"):
+            missing.append({
+                "service": "tmdb",
+                "label": "TMDB API Key  (movies & TV shows)",
+                "url": "https://www.themoviedb.org/settings/api",
+                "signup_url": "https://www.themoviedb.org/signup",
+            })
+    if content_type in (ContentType.GAME, ContentType.UNKNOWN):
+        if not get_api_key("igdb_client_id") or not get_api_key("igdb_client_secret"):
+            missing.append({
+                "service": "igdb",
+                "label": "IGDB Credentials  (games)",
+                "url": "https://dev.twitch.tv/console/apps",
+                "signup_url": "https://www.twitch.tv/signup",
+            })
+    return missing
+
+
 def search_for(folder_name: str, content_type: ContentType) -> List[SearchResult]:
     if content_type == ContentType.ANIME:
         return search_anime(folder_name)
