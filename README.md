@@ -14,6 +14,7 @@ A **Windows** desktop application that automatically sets custom folder icons pu
 - [Quickstart Workflow](#quickstart-workflow)
 - [UI Reference](#ui-reference)
   - [Toolbar](#toolbar)
+  - [Banners](#banners)
   - [Folder Table](#folder-table)
   - [Preview Panel](#preview-panel)
   - [Status Colors](#status-colors)
@@ -81,7 +82,7 @@ Folder name
 | **OS** | Windows 10 or Windows 11 only. The icon mechanism (`desktop.ini` + Win32 file-attribute flags + `SHChangeNotify`) is Windows-exclusive. |
 | **Python** | 3.10 or newer (3.12 / 3.13 recommended). |
 | **Internet** | Required at runtime to query APIs and download artwork. |
-| **Admin rights** | Not required in most cases. If Explorer shows the default yellow folder icon after applying, try running the app as Administrator once. |
+| **Admin rights** | **Recommended** (not strictly required). On launch, if the process is not elevated, a dialog explains that icon changes may fail on protected folders and offers **Restart as Administrator** or **No** to continue. While not running as Administrator, an **amber banner** appears at the top of the window with **Restart as Administrator**. Applying icons without elevation can fail on protected paths; error messages may suggest trying Administrator (see [Troubleshooting](#troubleshooting)). |
 
 ---
 
@@ -123,13 +124,15 @@ From the project root (with your virtualenv active):
 python -m app.main
 ```
 
+**Alternative (Windows):** run `launch.bat` from the repository root. It checks for Python 3.10+, can create a `.venv`, install dependencies from `requirements.txt`, and may offer to install Python via `winget` if no suitable interpreter is found.
+
 The window opens immediately. You do not need to configure anything for anime (AniList requires no key). For movies and TV shows you should add a TMDB key first (see [API Keys](#api-keys)).
 
 ---
 
 ## Quickstart Workflow
 
-1. Open the app (`python -m app.main`).
+1. Open the app (`python -m app.main` or `launch.bat`). If a dialog asks about **Administrator** rights, choose **Restart as Administrator** for the fewest permission issues, or **No** to continue.
 2. Click **⚙ Settings** → **API Keys** → enter your TMDB API key → **Save**.
 3. Click **+ Add All Subfolders…** and select your movies folder (e.g. `D:\Movies`). All immediate subfolders are added to the list.
 4. Click **▶ Run All**. The app detects each folder's content type, searches the appropriate database, and auto-applies icons for matches above the confidence threshold.
@@ -139,6 +142,8 @@ The window opens immediately. You do not need to configure anything for anime (A
 ---
 
 ## UI Reference
+
+The main window has a **minimum size** of **1200×620** pixels.
 
 ### Toolbar
 
@@ -151,6 +156,17 @@ The window opens immediately. You do not need to configure anything for anime (A
 | **↩ Undo All** | Revert every applied icon in the list back to the Windows default. |
 | **✕ Clear List** | Remove all rows from the table (does not undo icons). |
 | **⚙** | Open the Settings dialog. |
+
+### Banners
+
+Below the toolbar, one or both **information banners** may appear:
+
+| Banner | When | Actions |
+|---|---|---|
+| **Administrator** (amber) | The app is not running elevated | Explains that icon changes may fail on protected folders. **Restart as Administrator** relaunches the app with elevation (same as the optional startup dialog). |
+| **API keys** (purple) | TMDB and/or IGDB credentials are missing for searches that need them | Explains that movie, TV, and game searches need keys. **Open Settings to Add Keys** opens the Settings dialog. Anime (AniList / Jikan) still works without keys. |
+
+If keys are missing for a given content type during **Run All**, affected folders are skipped with a status message. The **Search Again** dialog shows its own **API key** banner with links to obtain credentials when the selected content type requires them.
 
 ### Folder Table
 
@@ -202,6 +218,8 @@ API keys are stored in the **Windows Credential Manager** (OS keyring), not in a
 | **IGDB Client ID** | [dev.twitch.tv/console](https://dev.twitch.tv/console) — create a Twitch application | Games |
 | **IGDB Client Secret** | Same Twitch application page | Games |
 
+The **API Keys** tab also includes a short note with **clickable links** to [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api) (TMDB) and [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) (Twitch apps for IGDB credentials).
+
 > **AniList** (anime) uses a public GraphQL API that requires no authentication. **Jikan** (MyAnimeList mirror) is used as a fallback, also with no key.
 
 ### Icon Style
@@ -220,7 +238,8 @@ API keys are stored in the **Windows Credential Manager** (OS keyring), not in a
 |---|---|---|---|
 | **AI upscale low-res anime images** | Checkbox | ✓ On | Use waifu2x to upscale small anime posters before compositing (requires waifu2x binary; falls back to LANCZOS). |
 | **Auto-apply threshold** | Spinner (50–100%) | `85%` | When a search result's confidence is at or above this value, the icon is applied automatically without user intervention. |
-| **Dark mode** | Checkbox | ✓ On | Switch between dark (#1a1a1a) and light system theme. |
+
+The application uses a **fixed dark theme** for the entire UI; there is no light mode or theme toggle in Settings.
 
 ---
 
@@ -308,7 +327,7 @@ All app data is stored under `%APPDATA%\FolderIconChanger\` (e.g. `C:\Users\Your
 
 | Path | Contents |
 |---|---|
-| `prefs.json` | User preferences (icon style, thresholds, dark mode, etc.) |
+| `prefs.json` | Preferences saved from Settings (icon style, rounded corners, badge, resolution, upscale, auto-apply threshold). Older files may still contain a legacy `dark_mode` key; the current UI does not expose or change it. |
 | `cache\` | `diskcache` directory for API responses and image file paths |
 | `undo\` | Per-folder undo snapshots (`<md5>.json`) |
 
@@ -347,10 +366,12 @@ Cached images are stored as `.png` files in the `cache\` directory. The cache is
 
 ```
 folder-icon-changer/
+├── launch.bat                   # Windows launcher: Python check, venv, pip install, run app
 ├── app/
-│   ├── main.py                  # Entry point — creates QApplication and MainWindow
+│   ├── main.py                  # Entry point — QApplication, optional admin relaunch + MainWindow
 │   ├── config.py                # Preferences (load/save prefs.json), API key keyring wrappers,
 │   │                            #   cache_dir() and undo_dir() path helpers
+│   ├── resources/               # Optional: icon.png (window icon when present)
 │   ├── api/
 │   │   ├── tmdb.py              # TMDB REST calls (search_movie, search_tv, poster_url, …)
 │   │   ├── anilist.py           # AniList GraphQL search + best_image_url
@@ -370,6 +391,8 @@ folder-icon-changer/
 │       ├── cache.py             # diskcache wrappers (get/set, image path helpers)
 │       ├── fuzzy.py             # clean_title() + best_match() using rapidfuzz
 │       └── upscaler.py          # waifu2x-ncnn-vulkan wrapper with LANCZOS fallback
+├── docs/
+│   └── screenshots/             # README screenshots (e.g. app-ui.png, result-explorer.png)
 ├── requirements.txt
 └── README.md
 ```
@@ -411,7 +434,7 @@ If the binary is absent, the app automatically falls back to Pillow `LANCZOS` re
 **"Applied ✓" but the icon is still the default yellow folder**
 
 - Ensure the folder is not on a network share or a drive with a file system that doesn't support NTFS alternate streams. The `desktop.ini` mechanism requires NTFS.
-- Run the app as Administrator.
+- Use the startup **Restart as Administrator** option, the **amber banner** in the main window, or relaunch the app as Administrator. Permission errors when applying an icon may say to try running as Administrator.
 
 **Movies/TV shows return no results**
 
