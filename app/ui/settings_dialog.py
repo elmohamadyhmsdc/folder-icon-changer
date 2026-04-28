@@ -60,9 +60,15 @@ class SettingsDialog(QDialog):
         form.addRow("IGDB Client Secret:", self._igdb_secret)
 
         note = QLabel(
-            "AniList (anime) requires no API key.\n"
-            "TMDB key: themoviedb.org  |  IGDB: dev.twitch.tv"
+            "AniList (anime) requires no API key.<br>"
+            "TMDB key: <a href='https://www.themoviedb.org/settings/api' "
+            "style='color:#818cf8;'>themoviedb.org</a>"
+            "&nbsp;&nbsp;|&nbsp;&nbsp;"
+            "IGDB: <a href='https://dev.twitch.tv/console/apps' "
+            "style='color:#818cf8;'>dev.twitch.tv</a>"
         )
+        note.setOpenExternalLinks(True)
+        note.setTextFormat(Qt.TextFormat.RichText)
         note.setStyleSheet(
             "color: #7070a0;"
             " font-size: 11px;"
