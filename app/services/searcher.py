@@ -70,26 +70,29 @@ def _igdb_to_result(entry: dict, confidence: float) -> SearchResult:
     )
 
 
+def _cached_fetch(cache_key: str, fetch):
+    """Return cached results, or call fetch() and cache it.
+
+    Empty results are never cached: they usually mean a network error, a rate
+    limit or a bad API key, and caching them would hide the problem for 24h
+    even after it is fixed.
+    """
+    cached = _cache.get(cache_key)
+    if cached:
+        return cached
+    results = fetch()
+    if results:
+        _cache.set(cache_key, results, ttl=86400)
+    return results
+
+
 def search_anime(query: str) -> List[SearchResult]:
     clean = clean_title(query)
-    cache_key = _cache.api_key(clean, "anilist")
-    cached = _cache.get(cache_key)
-
-    if cached is None:
-        results = anilist.search(clean)
-        _cache.set(cache_key, results, ttl=86400)
-    else:
-        results = cached
+    results = _cached_fetch(_cache.api_key(clean, "anilist"), lambda: anilist.search(clean))
 
     if not results:
         # Fallback to Jikan
-        jikan_key = _cache.api_key(clean, "jikan")
-        jikan_cached = _cache.get(jikan_key)
-        if jikan_cached is None:
-            results = jikan.search(clean)
-            _cache.set(jikan_key, results, ttl=86400)
-        else:
-            results = jikan_cached
+        results = _cached_fetch(_cache.api_key(clean, "jikan"), lambda: jikan.search(clean))
 
         ranked = best_match(clean, results, ["title_english", "title"], top_n=5)
         return [_jikan_to_result(entry, conf) for entry, conf in ranked]
@@ -103,13 +106,7 @@ def search_movie(query: str) -> List[SearchResult]:
     if not key:
         return []
     clean = clean_title(query)
-    cache_key = _cache.api_key(clean, "tmdb_movie")
-    cached = _cache.get(cache_key)
-    if cached is None:
-        results = tmdb.search_movie(clean, key)
-        _cache.set(cache_key, results, ttl=86400)
-    else:
-        results = cached
+    results = _cached_fetch(_cache.api_key(clean, "tmdb_movie"), lambda: tmdb.search_movie(clean, key))
     ranked = best_match(clean, results, ["title"], top_n=5)
     return [_tmdb_to_result(e, c, "tmdb_movie") for e, c in ranked]
 
@@ -119,13 +116,7 @@ def search_tv(query: str) -> List[SearchResult]:
     if not key:
         return []
     clean = clean_title(query)
-    cache_key = _cache.api_key(clean, "tmdb_tv")
-    cached = _cache.get(cache_key)
-    if cached is None:
-        results = tmdb.search_tv(clean, key)
-        _cache.set(cache_key, results, ttl=86400)
-    else:
-        results = cached
+    results = _cached_fetch(_cache.api_key(clean, "tmdb_tv"), lambda: tmdb.search_tv(clean, key))
     ranked = best_match(clean, results, ["name"], top_n=5)
     return [_tmdb_to_result(e, c, "tmdb_tv") for e, c in ranked]
 
@@ -136,13 +127,10 @@ def search_game(query: str) -> List[SearchResult]:
     if not client_id or not client_secret:
         return []
     clean = clean_title(query)
-    cache_key = _cache.api_key(clean, "igdb")
-    cached = _cache.get(cache_key)
-    if cached is None:
-        results = igdb.search(clean, client_id, client_secret)
-        _cache.set(cache_key, results, ttl=86400)
-    else:
-        results = cached
+    results = _cached_fetch(
+        _cache.api_key(clean, "igdb"),
+        lambda: igdb.search(clean, client_id, client_secret),
+    )
     ranked = best_match(clean, results, ["name"], top_n=5)
     return [_igdb_to_result(e, c) for e, c in ranked]
 

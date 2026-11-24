@@ -14,8 +14,14 @@ _DEFAULTS = {
     "show_rating_badge": False,
     "upscale_anime": True,
     "icon_size": 256,
-    "dark_mode": True,
+    "last_dir": "",
+    "window_geometry": "",
 }
+
+
+def defaults() -> dict:
+    """A copy of the default preferences."""
+    return dict(_DEFAULTS)
 
 
 def _ensure_dir():
@@ -46,6 +52,11 @@ def save_prefs(prefs: dict):
     _ensure_dir()
     with open(_PREFS_FILE, "w", encoding="utf-8") as f:
         json.dump(prefs, f, indent=2)
+
+
+def data_dir() -> str:
+    _ensure_dir()
+    return _CONFIG_DIR
 
 
 def cache_dir() -> str:

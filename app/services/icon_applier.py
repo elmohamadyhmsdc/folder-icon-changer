@@ -37,10 +37,13 @@ def apply(folder_path: str, ico_source: str) -> tuple[bool, str]:
     Returns (True, "") on success or (False, error_message) on failure.
     """
     try:
-        # Save undo state BEFORE making changes
-        _save_undo_state(folder_path)
-
         ico_dest = os.path.join(folder_path, _ICON_FILE)
+
+        # Save undo state BEFORE making changes. If we already applied an icon
+        # here, the saved state is the true original — don't overwrite it with
+        # the already-modified folder, or Undo could never restore the original.
+        if not (os.path.exists(_undo_path(folder_path)) and _file_exists_hidden(ico_dest)):
+            _save_undo_state(folder_path)
 
         # Clear any existing hidden/system/readonly flags so we can overwrite
         for path in [ico_dest, os.path.join(folder_path, _DESKTOP_INI)]:
@@ -107,6 +110,10 @@ def undo(folder_path: str) -> bool:
 def _undo_key(folder_path: str) -> str:
     import hashlib
     return hashlib.md5(folder_path.encode()).hexdigest() + ".json"
+
+
+def _undo_path(folder_path: str) -> str:
+    return os.path.join(undo_dir(), _undo_key(folder_path))
 
 
 def _save_undo_state(folder_path: str):

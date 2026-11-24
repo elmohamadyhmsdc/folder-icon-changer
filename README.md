@@ -1,6 +1,6 @@
 # Folder Icon Changer
 
-A **Windows** desktop application that automatically sets custom folder icons pulled from real movie, TV show, game, and anime artwork. Drop in your media folders, click **Run All**, and every folder gets a polished poster icon — complete with optional rounded corners, a blurred backdrop, and a rating badge.
+A **Windows** desktop application that automatically sets custom folder icons pulled from real movie, TV show, game, and anime artwork. Drop in your media folders (or let the app first put loose movie files into folders of their own), click **Find Icons**, and every folder gets a polished poster icon — complete with optional rounded corners, a blurred backdrop, and a rating badge.
 
 ---
 
@@ -82,7 +82,7 @@ Folder name
 | **OS** | Windows 10 or Windows 11 only. The icon mechanism (`desktop.ini` + Win32 file-attribute flags + `SHChangeNotify`) is Windows-exclusive. |
 | **Python** | 3.10 or newer (3.12 / 3.13 recommended). |
 | **Internet** | Required at runtime to query APIs and download artwork. |
-| **Admin rights** | **Recommended** (not strictly required). On launch, if the process is not elevated, a dialog explains that icon changes may fail on protected folders and offers **Restart as Administrator** or **No** to continue. While not running as Administrator, an **amber banner** appears at the top of the window with **Restart as Administrator**. Applying icons without elevation can fail on protected paths; error messages may suggest trying Administrator (see [Troubleshooting](#troubleshooting)). |
+| **Admin rights** | **Recommended** (not strictly required). When the app is not elevated, a dismissible **amber banner** at the top of the window explains that icon changes may fail on protected folders and offers **Restart as Administrator** (if you decline the UAC prompt the app simply stays open). Applying icons without elevation can fail on protected paths; error messages may suggest trying Administrator (see [Troubleshooting](#troubleshooting)). |
 
 ---
 
@@ -107,12 +107,10 @@ pip install -r requirements.txt
 |---|---|---|
 | `PyQt6` | ≥ 6.7 | Desktop GUI framework |
 | `requests` | ≥ 2.32 | HTTP downloads (posters, API calls) |
-| `gql[requests]` | ≥ 3.5 | GraphQL client for AniList |
 | `rapidfuzz` | ≥ 3.9 | Fuzzy-string matching for title confidence |
 | `Pillow` | ≥ 10.4 | Image compositing and `.ico` building |
 | `diskcache` | ≥ 5.6 | Persistent disk-based API + image cache |
 | `keyring` | ≥ 25 | Secure OS-keyring storage for API keys |
-| `python-dotenv` | ≥ 1.0 | Optional `.env` support |
 
 ---
 
@@ -132,63 +130,87 @@ The window opens immediately. You do not need to configure anything for anime (A
 
 ## Quickstart Workflow
 
-1. Open the app (`python -m app.main` or `launch.bat`). If a dialog asks about **Administrator** rights, choose **Restart as Administrator** for the fewest permission issues, or **No** to continue.
-2. Click **⚙ Settings** → **API Keys** → enter your TMDB API key → **Save**.
-3. Click **+ Add All Subfolders…** and select your movies folder (e.g. `D:\Movies`). All immediate subfolders are added to the list.
-4. Click **▶ Run All**. The app detects each folder's content type, searches the appropriate database, and auto-applies icons for matches above the confidence threshold.
-5. Click a row to preview the matched artwork on the right panel. If the wrong title was matched, click **Search Again…** to open the manual search dialog.
-6. Done. Refresh Windows Explorer (press **F5** in the folder's parent directory) if icons don't update immediately.
+1. Open the app (`python -m app.main` or `launch.bat`). If an amber banner says you are not running as Administrator, use **Restart as Administrator** for the fewest permission issues.
+2. Click **⚙ Settings** → **API Keys** → enter your TMDB API key → **Save** (anime needs no key).
+3. Add your folders: **Add Subfolders…** for a library such as `D:\Movies`, **Add Folders** for specific ones, or just **drag & drop** folders onto the window.
+   - If movie files lie *directly* in that library (no folder of their own), the app offers to **organize** them first — see [Organize loose movies](#organize-loose-movies).
+4. Click **▶ Find Icons** (`F5`). The app detects each folder's content type and searches the right database. Matches at or above the confidence threshold are applied automatically; the rest wait as **Ready to apply**.
+5. Review: click a row to see the exact icon preview. Wrong title? Click another entry under **Other matches**, or **Search…** for a different title.
+6. Click **✓ Apply All Ready** (or **Apply Icon** for the selected rows). Done.
+
+---
+
+## Organize loose movies
+
+Windows folder icons can only be set on *folders*. If your library looks like this:
+
+```
+D:\Movies\Inception.2010.1080p.BluRay.x264-GROUP.mkv
+D:\Movies\Inception.2010.1080p.BluRay.x264-GROUP.srt
+D:\Movies\Heat.1995.720p.mkv
+```
+
+use **🎬 Organize Movies…** (`Ctrl+M`), or accept the offer shown when you add a library folder that contains loose movies. You get a **preview** of every move first:
+
+- Each movie gets a folder named `Title (Year)` — `D:\Movies\Inception (2010)\`. Double-click a name to change it.
+- Subtitles and `.nfo` files with the same name move along with the movie.
+- TV episodes (`S01E02`) and sample clips are left alone.
+- Nothing is overwritten or deleted. If a file with the same name already exists in the target folder, that movie is marked and not moved.
+- With **Find and apply icons right after organizing** ticked (default), the new folders go straight through *Find Icons*.
+- **⋯ → Undo Last Organize…** moves everything back (removing any icon we applied and the folders we created).
 
 ---
 
 ## UI Reference
 
-The main window has a **minimum size** of **1200×620** pixels.
+The main window has a **minimum size** of **980×600** pixels. Its size and position, and the last folder you browsed, are remembered.
 
 ### Toolbar
 
-| Button | Action |
-|---|---|
-| **+ Add Folder(s)** | Open a folder picker and add a single folder. |
-| **+ Add All Subfolders…** | Pick a parent directory and add all of its immediate subdirectories at once. Ideal for a root `Movies/` or `Anime/` directory. |
-| **▶ Run All** | Process and apply icons for every folder in the list that hasn't been applied yet. |
-| **▶ Run Selected** | Process and apply only the currently highlighted row(s). |
-| **↩ Undo All** | Revert every applied icon in the list back to the Windows default. |
-| **✕ Clear List** | Remove all rows from the table (does not undo icons). |
-| **⚙** | Open the Settings dialog. |
+| Button | Shortcut | Action |
+|---|---|---|
+| **＋ Add Folders** | `Ctrl+O` | Pick one or more folders (Ctrl/Shift-click to select several). |
+| **Add Subfolders…** | `Ctrl+Shift+O` | Add every immediate subfolder of a library folder such as `Movies/` or `Anime/`. Offers to organize loose movie files first. |
+| **🎬 Organize Movies…** | `Ctrl+M` | Give loose movie files their own folders ([details](#organize-loose-movies)). |
+| **▶ Find Icons** | `F5` / `Ctrl+R` | Detect and search for every folder in the list (skipped and already-applied folders are left out). |
+| **✓ Apply All Ready (N)** | | Apply every match that is waiting for your approval. |
+| **⋯** | | *Undo All Icons…*, *Undo Last Organize…*, *Clear List*. |
+| **⚙** | `Ctrl+,` | Open Settings. |
+
+You can also **drag & drop** folders onto the window, and **right-click** rows for *Find icon, Apply, Search for another title, Skip, Undo, Open in Explorer, Remove from list*. `Delete` removes the selected rows from the list and `Enter` applies the selected rows.
 
 ### Banners
 
-Below the toolbar, one or both **information banners** may appear:
+Below the toolbar, one or both **dismissible banners** may appear:
 
 | Banner | When | Actions |
 |---|---|---|
-| **Administrator** (amber) | The app is not running elevated | Explains that icon changes may fail on protected folders. **Restart as Administrator** relaunches the app with elevation (same as the optional startup dialog). |
-| **API keys** (purple) | TMDB and/or IGDB credentials are missing for searches that need them | Explains that movie, TV, and game searches need keys. **Open Settings to Add Keys** opens the Settings dialog. Anime (AniList / Jikan) still works without keys. |
+| **Administrator** (amber) | The app is not running elevated | Explains that icon changes may fail on protected folders. **Restart as Administrator** relaunches the app with elevation. |
+| **API keys** (purple) | TMDB and/or IGDB credentials are missing | Explains that movie, TV, and game searches need keys. **Add API keys** opens Settings. Anime (AniList / Jikan) works without keys. |
 
-If keys are missing for a given content type during **Run All**, affected folders are skipped with a status message. The **Search Again** dialog shows its own **API key** banner with links to obtain credentials when the selected content type requires them.
+If keys are missing for a content type, affected folders show **No match** with a status-bar hint. The **Search…** dialog shows its own **API key** banner with links to obtain credentials.
 
 ### Folder Table
 
-Five columns are shown for each entry:
+An empty list shows a short welcome screen with the main actions. Once folders are added:
 
 | Column | Description |
 |---|---|
-| **Folder** | Truncated folder name (full path stored internally). |
+| **Folder** | Folder name (hover for the full path). |
 | **Type** | Detected content type: `Movie`, `TV Show`, `Anime`, `Game`, or `Unknown`. |
-| **Best Match** | The title of the top-ranked search result. |
-| **Conf.** | Fuzzy match confidence percentage (0–100%). Higher = more certain the right title was found. |
+| **Best match** | The title of the selected search result. |
+| **Match %** | Fuzzy title-match confidence. Green = at/above the auto-apply threshold, amber = 60%+, orange = lower. |
 | **Status** | Current processing state (see [Status Colors](#status-colors) below). |
 
-**Double-clicking** any row opens the **Search Again** dialog, same as clicking the button in the preview panel.
+The footer summarizes the list (*5 folders · 1 ready · 3 applied*). **Double-clicking** a row opens **Search…**.
 
-### Preview Panel
+### Details Panel
 
-The right-hand panel shows:
-- The poster image of the currently selected row's best match.
-- The title, year, and rating pulled from the API.
-- The source database and confidence score.
-- Four action buttons: **Apply This Icon**, **Skip**, **Search Again…**, **Undo This Folder**.
+The right-hand panel shows the selected folder and:
+- A **live preview of the real icon** — rendered with the same code and your current Icon Style settings as *Apply*.
+- Title, year, rating, source and match confidence.
+- **Other matches**: every candidate found; click one to switch (the row becomes *Ready to apply* again).
+- Pinned action buttons: **Apply Icon** (applies to *all* selected rows when several are selected), **Search…**, **Skip**, **Open** (in Explorer) and **Undo Icon**.
 
 ### Status Colors
 
@@ -196,11 +218,12 @@ The right-hand panel shows:
 |---|---|---|
 | Pending | Grey | Folder added but not yet processed. |
 | Searching… | Blue | Detection + API search in progress (background thread). |
-| Ready | Amber | Search complete; match found; waiting for auto-apply or manual apply. |
+| Ready to apply | Amber | A match was found below the auto-apply threshold (or you changed the match) — review it, then apply. |
 | Applying… | Blue | Image pipeline running and icon being written. |
 | Applied ✓ | Green | Icon successfully applied. |
 | Failed ✗ | Red | Something went wrong (no image URL, write permission error, etc.). |
-| Skipped | Dark grey | Match confidence was below threshold and no manual action was taken. |
+| No match | Orange | Nothing was found (or an API key is missing). Use **Search…** with another title. |
+| Skipped | Dark grey | You pressed **Skip**; **Find Icons** ignores the folder until you select it again. |
 
 ---
 
@@ -230,7 +253,7 @@ The **API Keys** tab also includes a short note with **clickable links** to [the
 | **Rounded corners** | Checkbox | ✓ On | Apply rounded corners to the icon edges. |
 | **Corner radius** | Spinner (0–64 px) | `12` | Pixel radius for the rounded corners. |
 | **Show rating badge** | Checkbox | Off | Overlay a ★ score pill in the bottom-right corner. |
-| **Icon resolution** | Spinner (128–512 px) | `256` | Size of the largest frame embedded in the `.ico` file. |
+| **Icon resolution** | Spinner (128–256 px) | `256` | Size of the largest frame embedded in the `.ico` file. |
 
 ### Behavior
 
@@ -327,7 +350,7 @@ All app data is stored under `%APPDATA%\FolderIconChanger\` (e.g. `C:\Users\Your
 
 | Path | Contents |
 |---|---|
-| `prefs.json` | Preferences saved from Settings (icon style, rounded corners, badge, resolution, upscale, auto-apply threshold). Older files may still contain a legacy `dark_mode` key; the current UI does not expose or change it. |
+| `prefs.json` | Preferences saved from Settings (icon style, rounded corners, badge, resolution, upscale, auto-apply threshold). Older files may still contain a legacy `dark_mode` key, which is ignored. |
 | `cache\` | `diskcache` directory for API responses and image file paths |
 | `undo\` | Per-folder undo snapshots (`<md5>.json`) |
 
@@ -354,10 +377,8 @@ Cached images are stored as `.png` files in the `cache\` directory. The cache is
 | **Pillow** | ≥ 10.4 | Image download, compositing, `.ico` generation |
 | **rapidfuzz** | ≥ 3.9 | Fuzzy title matching (`token_sort_ratio`) |
 | **requests** | ≥ 2.32 | HTTP API calls and image downloads |
-| **gql[requests]** | ≥ 3.5 | GraphQL client for AniList |
 | **diskcache** | ≥ 5.6 | Persistent disk-based cache |
 | **keyring** | ≥ 25 | Secure OS-keyring API key storage |
-| **python-dotenv** | ≥ 1.0 | Optional `.env` file loading |
 | **ctypes / Win32** | stdlib | `SetFileAttributesW`, `SHChangeNotify` |
 
 ---
@@ -368,7 +389,7 @@ Cached images are stored as `.png` files in the `cache\` directory. The cache is
 folder-icon-changer/
 ├── launch.bat                   # Windows launcher: Python check, venv, pip install, run app
 ├── app/
-│   ├── main.py                  # Entry point — QApplication, optional admin relaunch + MainWindow
+│   ├── main.py                  # Entry point — QApplication + MainWindow
 │   ├── config.py                # Preferences (load/save prefs.json), API key keyring wrappers,
 │   │                            #   cache_dir() and undo_dir() path helpers
 │   ├── resources/               # Optional: icon.png (window icon when present)
@@ -380,17 +401,24 @@ folder-icon-changer/
 │   ├── services/
 │   │   ├── detector.py          # Regex-based content-type detection + title cleaning
 │   │   ├── searcher.py          # Orchestrates API calls → SearchResult list with fuzzy ranking
-│   │   ├── image_pipeline.py    # Download → upscale → compose → build multi-res .ico
+│   │   ├── image_pipeline.py    # Download → upscale → compose (render_icon) → build multi-res .ico
+│   │   ├── organizer.py         # Loose movie files → "Title (Year)" folders, with logged undo
 │   │   └── icon_applier.py      # Write folder.ico + desktop.ini, Win32 attrs, undo support
 │   ├── ui/
-│   │   ├── main_window.py       # MainWindow, toolbar, folder table, worker threads
-│   │   ├── preview_widget.py    # Right-panel poster preview + metadata labels
+│   │   ├── main_window.py       # MainWindow: toolbar, empty state, folder table, details panel, workers
+│   │   ├── organize_dialog.py   # Preview-and-confirm dialog for organizing loose movies
+│   │   ├── preview_widget.py    # Live preview of the real icon + metadata labels
+│   │   ├── styles.py            # Dark theme (palette + stylesheet)
+│   │   ├── widgets.py           # ElidedLabel
 │   │   ├── search_dialog.py     # Manual search override dialog
-│   │   └── settings_dialog.py   # 3-tab settings dialog (API Keys, Icon Style, Behavior)
+│   │   └── settings_dialog.py   # 3-tab settings dialog with live icon-style preview
 │   └── utils/
+│       ├── admin.py             # is_admin() / relaunch_as_admin()
 │       ├── cache.py             # diskcache wrappers (get/set, image path helpers)
 │       ├── fuzzy.py             # clean_title() + best_match() using rapidfuzz
+│       ├── threads.py           # Keeps QThread workers alive until finished (no terminate())
 │       └── upscaler.py          # waifu2x-ncnn-vulkan wrapper with LANCZOS fallback
+├── tests/                       # pytest suite (pip install -r requirements-dev.txt)
 ├── docs/
 │   └── screenshots/             # README screenshots (e.g. app-ui.png, result-explorer.png)
 ├── requirements.txt
@@ -450,7 +478,7 @@ If the binary is absent, the app automatically falls back to Pillow `LANCZOS` re
 
 **Low confidence matches / wrong title matched**
 
-- Double-click the row (or click **Search Again…**) to open the manual search dialog. You can type a corrected query, change the content type, and pick from the result list.
+- Double-click the row (or click **Search…**) to open the manual search dialog. You can type a corrected query, change the content type, and pick from the result list.
 - Lowering the **Auto-apply threshold** in Settings → Behavior (e.g. to 70%) will let more matches apply automatically, but increases the chance of incorrect icons.
 
 ---

@@ -1,7 +1,7 @@
 import webbrowser
 from typing import Optional, List
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, QSize
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QListWidget, QListWidgetItem, QComboBox, QLabel, QDialogButtonBox,
@@ -11,19 +11,24 @@ from PyQt6.QtWidgets import (
 from app.services.detector import ContentType
 from app.services.searcher import SearchResult, search_for, get_missing_keys_info
 from app.ui.preview_widget import PreviewWidget
+from app.utils import threads
 
 
 class _SearchWorker(QThread):
-    results_ready = pyqtSignal(list)
+    results_ready = pyqtSignal(int, list)   # request id, results
 
-    def __init__(self, query: str, content_type: ContentType):
+    def __init__(self, request_id: int, query: str, content_type: ContentType):
         super().__init__()
+        self.request_id = request_id
         self.query = query
         self.content_type = content_type
 
     def run(self):
-        results = search_for(self.query, self.content_type)
-        self.results_ready.emit(results)
+        try:
+            results = search_for(self.query, self.content_type)
+        except Exception:
+            results = []
+        self.results_ready.emit(self.request_id, results)
 
 
 class SearchDialog(QDialog):
@@ -40,8 +45,16 @@ class SearchDialog(QDialog):
             self.setStyleSheet(parent.styleSheet())
         self._results: List[SearchResult] = []
         self.selected: Optional[SearchResult] = None
-        self._worker: Optional[_SearchWorker] = None
+        self._request_id = 0
         self._build_ui(initial_query, initial_type)
+        # Search straight away — the user opened this dialog to see alternatives.
+        if initial_query.strip():
+            QTimer.singleShot(0, self._do_search)
+
+    @property
+    def results(self) -> List[SearchResult]:
+        """Every result of the most recent search (so the caller can offer them as alternatives)."""
+        return self._results
 
     def _build_ui(self, query: str, content_type: ContentType):
         layout = QVBoxLayout(self)
@@ -53,6 +66,7 @@ class SearchDialog(QDialog):
         row.setSpacing(8)
         self._query_edit = QLineEdit(query)
         self._query_edit.setPlaceholderText("Title to search…")
+        self._query_edit.setClearButtonEnabled(True)
         self._query_edit.returnPressed.connect(self._do_search)
         row.addWidget(self._query_edit, stretch=3)
 
@@ -79,23 +93,24 @@ class SearchDialog(QDialog):
 
         self._list = QListWidget()
         self._list.currentRowChanged.connect(self._on_row_changed)
+        self._list.itemDoubleClicked.connect(lambda _item: self._accept())
         body.addWidget(self._list, stretch=2)
 
         self._preview = PreviewWidget()
-        self._preview.setMinimumWidth(260)
+        self._preview.setFixedWidth(270)
         body.addWidget(self._preview, stretch=1)
 
         layout.addLayout(body)
 
-        self._status = QLabel("Enter a query and press Search.")
-        self._status.setStyleSheet(
-            "color: #6060a0; font-size: 11px; background: transparent;"
-        )
+        self._status = QLabel("Enter a title and press Enter or Search.")
+        self._status.setObjectName("hint")
         layout.addWidget(self._status)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Use this match")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setObjectName("primaryBtn")
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -206,14 +221,18 @@ class SearchDialog(QDialog):
         ct = self._type_combo.currentData()
         self._status.setText("Searching…")
         self._list.clear()
+        self._preview.show_result(None)
         self._api_banner.setVisible(False)
-        if self._worker and self._worker.isRunning():
-            self._worker.terminate()
-        self._worker = _SearchWorker(query, ct)
-        self._worker.results_ready.connect(self._on_results)
-        self._worker.start()
+        # Superseded searches finish in the background and are ignored; threads
+        # are never terminated.
+        self._request_id += 1
+        worker = _SearchWorker(self._request_id, query, ct)
+        worker.results_ready.connect(self._on_results)
+        threads.start(worker)
 
-    def _on_results(self, results: List[SearchResult]):
+    def _on_results(self, request_id: int, results: List[SearchResult]):
+        if request_id != self._request_id:
+            return
         self._results = results
         self._list.clear()
         if not results:

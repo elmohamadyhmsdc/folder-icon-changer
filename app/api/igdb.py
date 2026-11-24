@@ -6,12 +6,15 @@ _BASE = "https://api.igdb.com/v4"
 _IMAGE_BASE = "https://images.igdb.com/igdb/image/upload/t_1080p/{image_id}.jpg"
 _COVER_BASE = "https://images.igdb.com/igdb/image/upload/t_cover_big/{image_id}.jpg"
 
+# Token cache, keyed by the credentials it was issued for so that changing the
+# Client ID/Secret in Settings never reuses a token from the old app.
 _cached_token: Optional[str] = None
+_cached_for: Optional[tuple] = None
 
 
 def _get_token(client_id: str, client_secret: str) -> Optional[str]:
-    global _cached_token
-    if _cached_token:
+    global _cached_token, _cached_for
+    if _cached_token and _cached_for == (client_id, client_secret):
         return _cached_token
     try:
         resp = requests.post(
@@ -25,12 +28,19 @@ def _get_token(client_id: str, client_secret: str) -> Optional[str]:
         )
         resp.raise_for_status()
         _cached_token = resp.json().get("access_token")
+        _cached_for = (client_id, client_secret)
         return _cached_token
     except Exception:
         return None
 
 
+def _escape(text: str) -> str:
+    """Escape a value for use inside a double-quoted Apicalypse string."""
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def search(title: str, client_id: str, client_secret: str, limit: int = 10) -> List[dict]:
+    global _cached_token, _cached_for
     token = _get_token(client_id, client_secret)
     if not token:
         return []
@@ -38,9 +48,13 @@ def search(title: str, client_id: str, client_secret: str, limit: int = 10) -> L
         resp = requests.post(
             f"{_BASE}/games",
             headers={"Client-ID": client_id, "Authorization": f"Bearer {token}"},
-            data=f'search "{title}"; fields name,cover.image_id,rating,summary,first_release_date; limit {limit};',
+            data=f'search "{_escape(title)}"; fields name,cover.image_id,rating,summary,first_release_date; limit {limit};',
             timeout=10,
         )
+        if resp.status_code == 401:
+            # Token expired or revoked — drop it so the next search fetches a new one.
+            _cached_token = None
+            _cached_for = None
         resp.raise_for_status()
         return resp.json()
     except Exception:

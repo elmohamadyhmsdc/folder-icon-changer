@@ -2,12 +2,16 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Optional
 
 from PIL import Image
 
-# Expected location of waifu2x binary shipped with the app
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+# Expected locations of the waifu2x binary (project root or app/resources)
 _BINARY_CANDIDATES = [
-    Path(__file__).parent.parent.parent / "resources" / "waifu2x-ncnn-vulkan" / "waifu2x-ncnn-vulkan.exe",
+    _PROJECT_ROOT / "resources" / "waifu2x-ncnn-vulkan" / "waifu2x-ncnn-vulkan.exe",
+    _PROJECT_ROOT / "app" / "resources" / "waifu2x-ncnn-vulkan" / "waifu2x-ncnn-vulkan.exe",
     Path("resources") / "waifu2x-ncnn-vulkan" / "waifu2x-ncnn-vulkan.exe",
 ]
 
@@ -17,6 +21,11 @@ def _find_binary() -> Optional[str]:
         if p.exists():
             return str(p)
     return None
+
+
+def _lanczos(img: Image.Image, scale: int) -> Image.Image:
+    w, h = img.size
+    return img.resize((w * scale, h * scale), Image.LANCZOS)
 
 
 def upscale(img: Image.Image, scale: int = 2, noise: int = 2) -> Image.Image:
@@ -29,9 +38,7 @@ def upscale(img: Image.Image, scale: int = 2, noise: int = 2) -> Image.Image:
     """
     binary = _find_binary()
     if binary is None:
-        # Fallback: standard high-quality resampling
-        w, h = img.size
-        return img.resize((w * scale, h * scale), Image.LANCZOS)
+        return _lanczos(img, scale)
 
     with tempfile.TemporaryDirectory() as tmp:
         inp = os.path.join(tmp, "input.png")
@@ -52,9 +59,4 @@ def upscale(img: Image.Image, scale: int = 2, noise: int = 2) -> Image.Image:
             return Image.open(out).copy()
         except Exception:
             # Any failure → LANCZOS fallback
-            w, h = img.size
-            return img.resize((w * scale, h * scale), Image.LANCZOS)
-
-
-# Fix missing Optional import
-from typing import Optional
+            return _lanczos(img, scale)

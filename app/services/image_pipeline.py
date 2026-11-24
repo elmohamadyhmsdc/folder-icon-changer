@@ -12,7 +12,10 @@ from app.utils import cache as _cache
 from app.utils import upscaler
 
 
-_ICON_SIZES = [(256, 256), (64, 64), (48, 48), (32, 32), (16, 16)]
+# ICO frames are limited to 256x256 by the format.
+_MAX_ICON_SIZE = 256
+_ICON_SIZES = [256, 128, 64, 48, 32, 16]
+_MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
 
 
 def _download_image(url: str) -> Optional[Image.Image]:
@@ -24,7 +27,12 @@ def _download_image(url: str) -> Optional[Image.Image]:
     try:
         resp = requests.get(url, stream=True, timeout=15)
         resp.raise_for_status()
-        data = resp.content
+        buf = bytearray()
+        for chunk in resp.iter_content(chunk_size=64 * 1024):
+            buf.extend(chunk)
+            if len(buf) > _MAX_DOWNLOAD_BYTES:
+                return None  # refuse absurdly large downloads
+        data = bytes(buf)
         img = Image.open(io.BytesIO(data)).convert("RGBA")
 
         # Persist to cache directory
@@ -171,26 +179,30 @@ def _compose(img: Image.Image, style: str, radius: int) -> Image.Image:
     return img
 
 
-def build_ico(
-    image_url: str,
-    output_path: str,
+def effective_icon_size(prefs: dict) -> int:
+    """Snap the configured resolution to a size Pillow's ICO writer can emit."""
+    requested = min(int(prefs.get("icon_size", 256)), _MAX_ICON_SIZE)
+    return next((s for s in _ICON_SIZES if s <= requested), _ICON_SIZES[-1])
+
+
+def render_icon(
+    img: Image.Image,
     content_type: ContentType = ContentType.UNKNOWN,
     score: Optional[float] = None,
-) -> bool:
+    prefs: Optional[dict] = None,
+    upscale: bool = True,
+) -> Image.Image:
     """
-    Full pipeline: download → maybe upscale → compose style → save .ico.
-    Returns True on success.
+    Turn a downloaded poster into the final square icon image, exactly as it
+    will be written into the .ico. The UI previews call this too (with
+    upscale=False for speed), so what you see is what you get.
     """
-    prefs = load_prefs()
+    prefs = prefs if prefs is not None else load_prefs()
     style = prefs.get("icon_style", "clean_poster")
     radius = prefs.get("corner_radius", 12) if prefs.get("rounded_corners", True) else 0
     show_badge = prefs.get("show_rating_badge", False)
-    do_upscale = prefs.get("upscale_anime", True)
-    target_size = prefs.get("icon_size", 256)
-
-    img = _download_image(image_url)
-    if img is None:
-        return False
+    do_upscale = upscale and prefs.get("upscale_anime", True)
+    target_size = effective_icon_size(prefs)
 
     # Upscale low-res anime images
     if do_upscale and content_type == ContentType.ANIME and img.width < 300:
@@ -204,10 +216,31 @@ def build_ico(
     # Badge is applied if the checkbox is on OR if "Rating Badge" is the chosen style
     if show_badge or style == "rating_badge":
         img = _add_rating_badge(img, score)
+    return img
+
+
+def build_ico(
+    image_url: str,
+    output_path: str,
+    content_type: ContentType = ContentType.UNKNOWN,
+    score: Optional[float] = None,
+) -> bool:
+    """
+    Full pipeline: download → maybe upscale → compose style → save .ico.
+    Returns True on success.
+    """
+    prefs = load_prefs()
+    img = _download_image(image_url)
+    if img is None:
+        return False
+
+    img = render_icon(img, content_type, score, prefs)
+    target_size = img.width
 
     # Build multi-resolution .ico — explicit per-size images (Pillow ICO requirement)
-    sizes_to_embed = [s for s in _ICON_SIZES if s[0] <= target_size]
-    frames = [img.resize(s, Image.LANCZOS).convert("RGBA") for s in sizes_to_embed]
+    # Largest frame first, then the smaller standard sizes.
+    sizes_to_embed = [s for s in _ICON_SIZES if s <= target_size]
+    frames = [img.resize((s, s), Image.LANCZOS).convert("RGBA") for s in sizes_to_embed]
 
     try:
         # Save largest first, append smaller — Pillow ICO requires largest as the base
@@ -215,3 +248,7 @@ def build_ico(
         return True
     except Exception:
         return False
+
+
+# Public name for UI code that needs the (cached) poster download.
+download_image = _download_image
